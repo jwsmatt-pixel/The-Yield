@@ -1,0 +1,1223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Group Cost Normaliser</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#1B2420;
+  --ink-soft:#4B564F;
+  --paper:#EFF0EA;
+  --panel:#FFFFFF;
+  --line:#D8DACF;
+  --line-soft:#E7E8E0;
+  --save:#2F6F52;
+  --save-bg:#E4EFE7;
+  --review:#B9772C;
+  --review-bg:#F6EADA;
+  --danger:#A8412E;
+  --danger-bg:#F5E4DF;
+  --current:#35586E;
+  --current-bg:#E4EAEE;
+  --radius:6px;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:'IBM Plex Sans',sans-serif;
+  font-size:14px;
+  line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+}
+.num{font-family:'IBM Plex Mono',monospace; font-variant-numeric: tabular-nums;}
+button{font-family:inherit;cursor:pointer;}
+input,select{font-family:inherit;font-size:13px;}
+a{color:inherit;}
+
+/* ---- Shell ---- */
+#app{display:flex; min-height:100vh;}
+.rail{
+  width:196px; flex:none; background:var(--ink); color:#EFEFE8;
+  display:flex; flex-direction:column; padding:20px 0;
+}
+.rail-brand{
+  padding:0 20px 18px 20px; border-bottom:1px solid #33413A;
+  margin-bottom:8px;
+}
+.rail-brand .mark{
+  display:inline-block; width:9px; height:9px; background:var(--save); border-radius:2px; margin-right:7px;
+}
+.rail-brand .name{font-weight:600; font-size:14.5px; letter-spacing:0.2px;}
+.rail-brand .sub{font-size:11px; color:#93A398; margin-top:3px; letter-spacing:.4px; text-transform:uppercase;}
+.rail-nav{display:flex; flex-direction:column; padding:6px 10px; gap:2px;}
+.rail-btn{
+  text-align:left; background:none; border:none; color:#C9D3C9;
+  padding:9px 12px; border-radius:5px; font-size:13.5px; font-weight:500;
+  display:flex; align-items:center; justify-content:space-between;
+}
+.rail-btn:hover{background:#26332C; color:#fff;}
+.rail-btn.active{background:#2C3A32; color:#fff;}
+.rail-btn .count{
+  font-family:'IBM Plex Mono',monospace; font-size:11px; background:#3B4A41; color:#D9E4DA;
+  padding:1px 6px; border-radius:9px;
+}
+.rail-btn.active .count{background:var(--review); color:#26170A;}
+.rail-foot{margin-top:auto; padding:14px 20px 0 20px; border-top:1px solid #33413A;}
+.rail-foot button{
+  width:100%; background:none; border:1px solid #435247; color:#C9D3C9;
+  padding:7px 10px; border-radius:5px; font-size:12px; margin-top:8px; text-align:left;
+}
+.rail-foot button:hover{border-color:#7C8F80; color:#fff;}
+.rail-foot button.danger:hover{border-color:var(--danger); color:#F3C9C0;}
+
+.main{flex:1; min-width:0; padding:28px 36px 60px 36px;}
+.topline{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:22px;}
+.topline h1{font-size:20px; margin:0; font-weight:600; letter-spacing:-0.2px;}
+.topline .meta{font-size:12.5px; color:var(--ink-soft);}
+
+/* ---- Summary strip ---- */
+.summary-strip{display:flex; gap:10px; margin-bottom:22px; flex-wrap:wrap;}
+.summary-card{
+  background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+  padding:12px 16px; min-width:130px;
+}
+.summary-card .v{font-family:'IBM Plex Mono',monospace; font-size:21px; font-weight:600;}
+.summary-card .l{font-size:11.5px; color:var(--ink-soft); margin-top:2px;}
+.summary-card.opportunity{background:var(--save-bg); border-color:#C4DBC9;}
+.summary-card.opportunity .v{color:var(--save);}
+.summary-card.review .v{color:var(--review);}
+
+/* ---- Panels / tables ---- */
+.panel{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); margin-bottom:18px; overflow:hidden;}
+.panel-head{padding:13px 16px; border-bottom:1px solid var(--line-soft); display:flex; align-items:center; justify-content:space-between;}
+.panel-head h2{font-size:14.5px; margin:0; font-weight:600;}
+.panel-head .hint{font-size:11.5px; color:var(--ink-soft);}
+table{width:100%; border-collapse:collapse;}
+th{
+  text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.5px; color:var(--ink-soft);
+  font-weight:600; padding:9px 14px; border-bottom:1px solid var(--line); background:#F6F6F1;
+}
+td{padding:10px 14px; border-bottom:1px solid var(--line-soft); font-size:13.5px; vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr.best-row{background:var(--save-bg);}
+.num-cell{font-family:'IBM Plex Mono',monospace; font-variant-numeric:tabular-nums;}
+.right{text-align:right;}
+
+.group-input{
+  width:140px; padding:5px 8px; border:1px solid var(--line); border-radius:5px; background:#FBFBF8; font-size:13px;
+}
+.group-input:focus{outline:none; border-color:var(--current); background:#fff;}
+
+/* pack chip */
+.pack-chip{
+  display:inline-flex; align-items:center; gap:6px; background:#F1F2EC; border:1px solid var(--line);
+  border-radius:5px; padding:4px 9px; font-family:'IBM Plex Mono',monospace; font-size:12.5px; cursor:pointer;
+}
+.pack-chip:hover{border-color:var(--ink-soft);}
+.pack-chip .dot{width:6px; height:6px; border-radius:50%; flex:none;}
+.dot.verified{background:var(--save);}
+.dot.predicted{background:var(--current);}
+.dot.review{background:var(--danger);}
+
+.badge{display:inline-block; font-size:10.5px; font-weight:600; padding:2px 7px; border-radius:9px; letter-spacing:.2px;}
+.badge.verified{background:var(--save-bg); color:var(--save);}
+.badge.predicted{background:var(--current-bg); color:var(--current);}
+.badge.review{background:var(--danger-bg); color:var(--danger);}
+.badge.missing{background:var(--danger-bg); color:var(--danger);}
+
+.pill-btn{
+  background:var(--panel); border:1px solid var(--line); border-radius:5px; padding:5px 11px; font-size:12px; font-weight:500;
+}
+.pill-btn:hover{border-color:var(--ink-soft);}
+.pill-btn.primary{background:var(--ink); color:#fff; border-color:var(--ink);}
+.pill-btn.primary:hover{opacity:.9;}
+.pill-btn.save{background:var(--save); color:#fff; border-color:var(--save);}
+.pill-btn.ghost{border:none; background:none; color:var(--ink-soft);}
+.pill-btn.ghost:hover{color:var(--ink);}
+.pill-btn + .pill-btn{margin-left:6px;}
+
+.empty{padding:34px 16px; text-align:center; color:var(--ink-soft); font-size:13px;}
+.empty .pill-btn{margin-top:12px;}
+
+/* group grid on Compare landing */
+.group-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:12px;}
+.group-card{
+  background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:14px 16px; text-align:left;
+}
+.group-card:hover{border-color:var(--ink-soft);}
+.group-card .gname{font-weight:600; font-size:14px; margin-bottom:6px;}
+.group-card .grow{display:flex; justify-content:space-between; font-size:12px; color:var(--ink-soft); margin-top:3px;}
+.group-card .gbest{font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:var(--save); margin-top:8px;}
+.group-card .gwarn{font-size:11.5px; color:var(--danger); margin-top:6px;}
+
+.diff-note{font-size:11.5px; color:var(--ink-soft); margin-top:2px;}
+.diff-note.pos{color:var(--save);}
+
+/* modal */
+.overlay{position:fixed; inset:0; background:rgba(20,26,22,.45); display:flex; align-items:flex-start; justify-content:center; padding:48px 16px; z-index:50; overflow:auto;}
+.modal{background:var(--panel); border-radius:8px; width:480px; max-width:100%; border:1px solid var(--line); box-shadow:0 12px 40px rgba(0,0,0,.18);}
+.modal-head{padding:16px 20px; border-bottom:1px solid var(--line-soft);}
+.modal-head .kicker{font-size:10.5px; text-transform:uppercase; letter-spacing:.6px; color:var(--ink-soft); margin-bottom:3px;}
+.modal-head h3{margin:0; font-size:16px;}
+.modal-head .sku{font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--ink-soft); margin-top:4px;}
+.modal-body{padding:18px 20px;}
+.field-row{display:flex; gap:10px; margin-bottom:12px;}
+.field{flex:1;}
+.field label{display:block; font-size:11px; color:var(--ink-soft); margin-bottom:4px; text-transform:uppercase; letter-spacing:.3px;}
+.field input, .field select{width:100%; padding:7px 9px; border:1px solid var(--line); border-radius:5px; background:#FBFBF8;}
+.field input:focus, .field select:focus{outline:none; border-color:var(--current);}
+.ladder{
+  display:flex; align-items:center; gap:6px; font-family:'IBM Plex Mono',monospace; font-size:12px;
+  color:var(--ink-soft); margin:2px 0 16px 0; flex-wrap:wrap;
+}
+.ladder b{color:var(--ink);}
+.derived{
+  background:#F6F6F1; border:1px solid var(--line); border-radius:6px; padding:12px 14px; margin-top:4px;
+}
+.derived .row{display:flex; justify-content:space-between; font-size:13px; padding:3px 0;}
+.derived .row.total .v{font-weight:600; font-size:16px;}
+.derived .row.cost .v{font-weight:700; font-size:19px; color:var(--save);}
+.derived .warn{color:var(--danger); font-size:12px; margin-top:6px;}
+.modal-foot{padding:14px 20px; border-top:1px solid var(--line-soft); display:flex; justify-content:flex-end; gap:8px;}
+.src-note{font-size:11.5px; color:var(--ink-soft); margin:-4px 0 14px 0; padding:8px 10px; background:#F6F6F1; border-radius:5px;}
+
+/* import */
+.dropzone{
+  border:1.5px dashed var(--line); border-radius:8px; padding:34px; text-align:center; color:var(--ink-soft);
+  background:var(--panel);
+}
+.dropzone input{display:none;}
+.map-grid{display:grid; grid-template-columns:1fr 1fr; gap:14px; padding:16px;}
+.map-row label{font-size:12px; color:var(--ink-soft); display:block; margin-bottom:4px;}
+.map-row select{width:100%; padding:7px 9px; border:1px solid var(--line); border-radius:5px;}
+.req{color:var(--danger); font-size:10.5px; margin-left:3px;}
+
+.filters{display:flex; gap:8px; padding:12px 16px; border-bottom:1px solid var(--line-soft); flex-wrap:wrap;}
+.filters input, .filters select{padding:6px 9px; border:1px solid var(--line); border-radius:5px; font-size:12.5px;}
+.filters input{width:200px;}
+
+.toast{
+  position:fixed; bottom:22px; left:50%; transform:translateX(-50%); background:var(--ink); color:#fff;
+  padding:10px 18px; border-radius:20px; font-size:12.5px; z-index:80; box-shadow:0 6px 20px rgba(0,0,0,.2);
+}
+.small-btn-inline{font-size:11px; color:var(--current); background:none; border:none; text-decoration:underline; padding:0;}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+// ============================================================
+// GROUP COST NORMALISER — v0.1
+// Layers, kept deliberately separate per the architecture in the spec:
+//   Import -> Prediction -> Truth/Override -> Conversion -> Cost
+//   -> Comparison -> Opportunity -> Presentation
+// ============================================================
+
+/* ---------------- CONVERSION + COST ENGINE (deterministic, pure) ---------------- */
+
+const UNIT_DIMENSION = {
+  MG:"mass", G:"mass", KG:"mass",
+  ML:"volume", L:"volume",
+  EA:"count", EACH:"count", UNIT:"count", UNITS:"count", PCS:"count", PIECE:"count", PIECES:"count",
+};
+const CANONICAL_UNIT = { mass:"kg", volume:"L", count:"each" };
+const TO_CANONICAL = {
+  MG:v=>v/1_000_000, G:v=>v/1000, KG:v=>v,
+  ML:v=>v/1000, L:v=>v,
+  EA:v=>v, EACH:v=>v, UNIT:v=>v, UNITS:v=>v, PCS:v=>v, PIECE:v=>v, PIECES:v=>v,
+};
+function normaliseUnitToken(tok){
+  if(!tok) return null;
+  let t = tok.trim().toUpperCase();
+  if(["LTR","LT","LITRE","LITER","LITERS","LITRES"].includes(t)) t="L";
+  if(["GRAM","GRAMS","GM","GMS"].includes(t)) t="G";
+  if(["KGS","KILO","KILOS","KILOGRAM","KILOGRAMS"].includes(t)) t="KG";
+  if(["MGS","MILLIGRAM","MILLIGRAMS"].includes(t)) t="MG";
+  if(["MLS","MILLILITRE","MILLILITRES","MILLILITER","MILLILITERS"].includes(t)) t="ML";
+  return UNIT_DIMENSION[t] ? t : null;
+}
+function makePack({outers,inners,unitsPerInner,qtyPerUnit,unit}){
+  return {outers:outers??null, inners:inners??null, unitsPerInner:unitsPerInner??null, qtyPerUnit:qtyPerUnit??null, unit:unit??null};
+}
+// Container/case words describe HOW something is packed, not WHAT canonical
+// quantity it is (Bucket, Tin, Btle, Drum, Wedge, Crate, Pouch...). Rather than
+// maintain an exhaustive word list, trust a parenthetical detail's CONTENT —
+// "Bucket (10kg)" -> read "10kg" — but only when no OTHER digit sits outside
+// the parens, so an outer multiplier like "3 x (5kg)" is never silently dropped.
+function searchQuantity(t){
+  const NUM = "\\d+(?:\\.\\d+)?", UW = "[A-Z]+";
+  const candidates = [
+    {re:new RegExp(`(${NUM})\\s*X\\s*(${NUM})\\s*X\\s*(${NUM})\\s*(${UW})`), levels:3},
+    {re:new RegExp(`(${NUM})\\s*X\\s*(${NUM})\\s*(${UW})`), levels:2},
+    {re:new RegExp(`(${NUM})\\s*(${UW})`), levels:1},
+  ];
+  for(const {re,levels} of candidates){
+    const m = t.match(re);
+    if(!m) continue;
+    let unit, pack;
+    if(levels===3){ unit=normaliseUnitToken(m[4]); if(!unit) continue; pack=makePack({outers:1,inners:+m[1],unitsPerInner:+m[2],qtyPerUnit:+m[3],unit}); }
+    else if(levels===2){ unit=normaliseUnitToken(m[3]); if(!unit) continue; pack=makePack({outers:1,inners:+m[1],unitsPerInner:1,qtyPerUnit:+m[2],unit}); }
+    else { unit=normaliseUnitToken(m[2]); if(!unit) continue; pack=makePack({outers:1,inners:1,unitsPerInner:1,qtyPerUnit:+m[1],unit}); }
+    const before = t.slice(0, m.index), after = t.slice(m.index+m[0].length);
+    if(/\d/.test(before) || /\d/.test(after)) continue; // another number elsewhere -> ambiguous, don't guess
+    const exact = before.trim()==="" && after.trim()==="";
+    return {pack, confidence: exact?"high":"medium", reason: exact?"Unambiguous pack format":"Quantity read from surrounding pack text"};
+  }
+  return null;
+}
+function parsePackDescription(rawText){
+  if(!rawText || !String(rawText).trim()) return {pack:null, confidence:"low", reason:"Blank pack description"};
+  let t = String(rawText).toUpperCase().replace(/×/g,"X").replace(/,/g,"").replace(/\$/g,"");
+  t = t.replace(/\s+/g," ").trim();
+
+  const pm = t.match(/\(([^)]*)\)/);
+  if(pm){
+    const outsideHasDigit = /\d/.test(t.slice(0,pm.index)) || /\d/.test(t.slice(pm.index+pm[0].length));
+    if(!outsideHasDigit){
+      const result = searchQuantity(pm[1].trim());
+      if(result) return {...result, confidence:"medium", reason: result.reason+" (read from parenthetical detail)"};
+    }
+    return {pack:null, confidence:"low", reason:"Parenthetical pack detail has no clear quantity — needs a human read"};
+  }
+
+  const result = searchQuantity(t);
+  if(result) return result;
+  return {pack:null, confidence:"low", reason:"Could not confidently interpret pack text"};
+}
+function calculateEqualisedCost(pack, outerPrice){
+  if(!pack || !pack.unit) return {state:"invalid", error:"Unknown or missing unit"};
+  const dim = UNIT_DIMENSION[pack.unit];
+  if(!dim) return {state:"invalid", error:"Unrecognised unit"};
+  const factors = [pack.outers, pack.inners, pack.unitsPerInner, pack.qtyPerUnit];
+  if(factors.some(f=>f===null||f===undefined||isNaN(f)||f<=0)) return {state:"invalid", error:"Invalid or missing multiplication factor"};
+  if(outerPrice===null||outerPrice===undefined||isNaN(outerPrice)||outerPrice<=0) return {state:"invalid", error:"Price must be greater than zero"};
+  const rawQty = pack.outers*pack.inners*pack.unitsPerInner*pack.qtyPerUnit;
+  const canonicalQty = TO_CANONICAL[pack.unit](rawQty);
+  if(!(canonicalQty>0)) return {state:"invalid", error:"Total quantity must be greater than zero"};
+  const canonicalUnit = CANONICAL_UNIT[dim];
+  return {state:"ok", dimension:dim, canonicalUnit, canonicalQty, equalisedCost: outerPrice/canonicalQty};
+}
+function fmtCurrency(v){ return (v===null||v===undefined||isNaN(v)) ? "—" : "$"+v.toFixed(2); }
+function fmtEqualised(v,unit){
+  if(v===null||v===undefined||isNaN(v)) return "—";
+  const d = v<1?4:v<10?3:2;
+  return "$"+v.toFixed(d)+"/"+unit;
+}
+function fmtQty(v,unit){ if(v==null||isNaN(v)) return "—"; return (Math.round(v*1000)/1000)+" "+unit; }
+
+/* ---------------- STATE ---------------- */
+
+const STORE_KEYS = { products:"gcn:products", overrides:"gcn:overrides", groups:"gcn:groupSettings" };
+let S = {
+  products: [],        // raw imported/demo rows
+  overrides: {},        // "SUPPLIER||SKU" -> {pack, verifiedAt, descriptionAtVerification}
+  groupSettings: {},     // groupName -> {annualVolume, currentSupplierId}
+  screen: "compare",
+  selectedGroup: null,
+  editingProductId: null,
+  editDraft: null,
+  importRows: null, importHeaders: null, importMapping: null, importStep: 0,
+  filters: {search:"", supplier:"", group:"", status:""},
+  toast: null,
+  ready: false,
+};
+
+function overrideKey(supplier, sku){ return (supplier||"").trim().toUpperCase()+"||"+(sku||"").trim().toUpperCase(); }
+
+// Persistence works two ways depending on where this file is running:
+//  - Inside Claude.ai's artifact viewer, window.storage exists and is used directly.
+//  - Opened as a standalone file (double-clicked, or hosted anywhere else — the
+//    normal trial-distribution case) window.storage doesn't exist, so this falls
+//    back to plain browser localStorage, which behaves the same way from the
+//    app's point of view: local to this browser only, survives refresh/restart.
+const localPersistence = {
+  async get(key){
+    try{ const v = localStorage.getItem(key); return v!==null ? {key, value:v} : null; }
+    catch(e){ return null; }
+  },
+  async set(key, value){
+    try{ localStorage.setItem(key, value); return {key, value}; }
+    catch(e){ return null; }
+  },
+};
+const storage = (typeof window.storage !== "undefined" && window.storage) ? window.storage : localPersistence;
+const usingFallbackStorage = storage === localPersistence;
+
+async function loadState(){
+  try{ const r = await storage.get(STORE_KEYS.products); S.products = r ? JSON.parse(r.value) : []; }catch(e){ S.products = []; }
+  try{ const r = await storage.get(STORE_KEYS.overrides); S.overrides = r ? JSON.parse(r.value) : {}; }catch(e){ S.overrides = {}; }
+  try{ const r = await storage.get(STORE_KEYS.groups); S.groupSettings = r ? JSON.parse(r.value) : {}; }catch(e){ S.groupSettings = {}; }
+  S.ready = true;
+  render();
+}
+async function persist(which){
+  try{
+    if(which==="products"||which==="all") await storage.set(STORE_KEYS.products, JSON.stringify(S.products));
+    if(which==="overrides"||which==="all") await storage.set(STORE_KEYS.overrides, JSON.stringify(S.overrides));
+    if(which==="groups"||which==="all") await storage.set(STORE_KEYS.groups, JSON.stringify(S.groupSettings));
+  }catch(e){ showToast("Could not save — storage error"); }
+}
+function showToast(msg){ S.toast = msg; render(); setTimeout(()=>{ S.toast=null; render(); }, 2600); }
+
+/* ---------------- DEMO DATA ---------------- */
+
+function demoData(){
+  return [
+    {id:cryptoId(), supplier:"Supplier A", sku:"A101", description:"Chicken Breast", packText:"1 x 5kg", group:"Chicken Breast", outerPrice:48.50},
+    {id:cryptoId(), supplier:"Supplier B", sku:"B201", description:"Chicken Breast Fillet", packText:"2 x 5kg", group:"Chicken Breast", outerPrice:91.00},
+    {id:cryptoId(), supplier:"Supplier C", sku:"C330", description:"CHKN BRST BULK 10KG", packText:"10kg CTN", group:"Chicken Breast", outerPrice:95.00},
+    {id:cryptoId(), supplier:"Supplier D", sku:"D440", description:"CHKN BRST BULK PK", packText:"", group:"Chicken Breast", outerPrice:96.00},
+    {id:cryptoId(), supplier:"Supplier A", sku:"A500", description:"Canola Oil", packText:"4 x 5L", group:"Canola Oil", outerPrice:72.00},
+    {id:cryptoId(), supplier:"Supplier B", sku:"B510", description:"Frying Oil", packText:"20L", group:"Canola Oil", outerPrice:68.00},
+    {id:cryptoId(), supplier:"Supplier A", sku:"A700", description:"Mineral Water", packText:"24 x 600ml", group:"Bottled Water", outerPrice:22.00},
+    {id:cryptoId(), supplier:"Supplier B", sku:"B710", description:"Mineral Water", packText:"12 x 1L", group:"Bottled Water", outerPrice:19.50},
+    {id:cryptoId(), supplier:"Supplier E", sku:"E900", description:"Mineral Water 600ml", packText:"24 x 600ml", group:"Bottled Water", outerPrice:0},
+  ];
+}
+function cryptoId(){ return "p_"+Math.random().toString(36).slice(2,10)+Date.now().toString(36); }
+
+async function loadDemo(){
+  S.products = demoData();
+  S.groupSettings = {
+    "Chicken Breast": {annualVolume:22400, currentSupplierId: S.products.find(p=>p.sku==="A101").id},
+    "Canola Oil": {annualVolume:4800, currentSupplierId: S.products.find(p=>p.sku==="A500").id},
+    "Bottled Water": {annualVolume:null, currentSupplierId: S.products.find(p=>p.sku==="A700").id},
+  };
+  S.overrides = {};
+  await persist("all");
+  S.screen = "compare"; S.selectedGroup = null;
+  showToast("Demo data loaded");
+}
+async function resetPrototype(){
+  S.products = []; S.overrides = {}; S.groupSettings = {};
+  await persist("all");
+  S.screen = "compare"; S.selectedGroup = null;
+  showToast("Prototype reset — all local data cleared");
+}
+
+/* ---------------- COMPUTE (Trust hierarchy: Verified override > Parser prediction > Needs Review) ---------------- */
+
+function computeProduct(p){
+  const key = overrideKey(p.supplier, p.sku);
+  const ov = S.overrides[key];
+  let pack, status, confidence, reason, descriptionChanged=false;
+
+  if(ov){
+    pack = ov.pack; status = "verified"; confidence = "high"; reason = "Verified by user";
+    const currentSourceText = (p.packText && p.packText.trim()) ? p.packText : p.description;
+    if(ov.descriptionAtVerification !== undefined && ov.descriptionAtVerification !== currentSourceText){
+      descriptionChanged = true;
+    }
+  } else {
+    const sourceText = (p.packText && p.packText.trim()) ? p.packText : p.description;
+    const parsed = parsePackDescription(sourceText);
+    pack = parsed.pack; confidence = parsed.confidence; reason = parsed.reason;
+    status = pack && confidence!=="low" ? "predicted" : "needsReview";
+  }
+
+  const calc = pack ? calculateEqualisedCost(pack, p.outerPrice) : {state:"invalid", error:"No interpretable pack structure"};
+  const missingInfo = calc.state!=="ok";
+
+  return {product:p, pack, status, confidence, reason, calc, missingInfo, descriptionChanged};
+}
+
+function allComputed(){ return S.products.map(computeProduct); }
+
+function groupList(){
+  const set = new Set();
+  S.products.forEach(p=>{ if(p.group) set.add(p.group); });
+  return Array.from(set).sort();
+}
+
+function groupRows(groupName){
+  return allComputed().filter(c=>c.product.group===groupName);
+}
+
+function sortedValidRows(rows){
+  const valid = rows.filter(r=>r.calc.state==="ok");
+  const invalid = rows.filter(r=>r.calc.state!=="ok");
+  valid.sort((a,b)=>a.calc.equalisedCost-b.calc.equalisedCost);
+  return {valid, invalid};
+}
+
+/* ---------------- CSV parsing (minimal, quote-aware) ---------------- */
+
+function parseCSV(text){
+  const rows = []; let row=[]; let field=""; let inQuotes=false;
+  for(let i=0;i<text.length;i++){
+    const c = text[i];
+    if(inQuotes){
+      if(c === '"'){ if(text[i+1]==='"'){ field+='"'; i++; } else inQuotes=false; }
+      else field += c;
+    } else {
+      if(c === '"') inQuotes = true;
+      else if(c === ','){ row.push(field); field=""; }
+      else if(c === '\n'){ row.push(field); rows.push(row); row=[]; field=""; }
+      else if(c === '\r'){ /* skip */ }
+      else field += c;
+    }
+  }
+  if(field.length || row.length){ row.push(field); rows.push(row); }
+  return rows.filter(r => r.length>1 || (r.length===1 && r[0].trim()!==""));
+}
+function toCSVField(v){
+  v = (v===null||v===undefined) ? "" : String(v);
+  if(/[",\n]/.test(v)) return '"'+v.replace(/"/g,'""')+'"';
+  return v;
+}
+
+/* ---------------- ACTIONS ---------------- */
+
+function openPackEditor(productId){
+  const p = S.products.find(x=>x.id===productId);
+  const c = computeProduct(p);
+  const pack = c.pack || makePack({outers:1, inners:1, unitsPerInner:1, qtyPerUnit:null, unit:null});
+  S.editingProductId = productId;
+  S.editDraft = {...pack};
+  // Raw typed strings, shown in the fields verbatim — kept separate from the
+  // parsed numeric values (used for the actual calculation) so an in-progress
+  // decimal point ("7.") doesn't get silently rounded away mid-keystroke by
+  // a parseFloat round-trip before the user finishes typing "7.5".
+  S.editDraftRaw = {
+    outers: pack.outers ?? "", inners: pack.inners ?? "", unitsPerInner: pack.unitsPerInner ?? "",
+    qtyPerUnit: pack.qtyPerUnit ?? "", outerPrice: p.outerPrice ?? "",
+  };
+  render();
+}
+function closeEditor(){ S.editingProductId=null; S.editDraft=null; S.editDraftRaw=null; render(); }
+function updateDraft(field, value){
+  if(field==="unit"){ S.editDraft.unit = value || null; render(); return; }
+  S.editDraftRaw[field] = value;
+  S.editDraft[field] = value===""? null : parseFloat(value);
+  render();
+}
+async function saveDraft(verify){
+  const p = S.products.find(x=>x.id===S.editingProductId);
+  const pack = {...S.editDraft};
+  if(verify){
+    const key = overrideKey(p.supplier, p.sku);
+    const sourceText = (p.packText && p.packText.trim()) ? p.packText : p.description;
+    S.overrides[key] = {pack, verifiedAt: new Date().toISOString(), descriptionAtVerification: sourceText};
+    await persist("overrides");
+    showToast("Pack structure verified — remembered for "+p.supplier+" / "+p.sku);
+  } else {
+    // Save as predicted: don't create a verified override; just adjust the source pack text
+    // so the deterministic parser (or the editor, next time) starts from this structure.
+    p.packText = describePack(pack);
+    await persist("products");
+    showToast("Saved as predicted (not yet verified)");
+  }
+  closeEditor();
+}
+function describePack(pack){
+  if(!pack || !pack.unit) return "";
+  const parts = [];
+  const total = [pack.inners, pack.unitsPerInner].filter(n=>n && n!==1);
+  if(pack.inners && pack.inners!==1 && pack.unitsPerInner && pack.unitsPerInner!==1){
+    return `${pack.inners} x ${pack.unitsPerInner} x ${pack.qtyPerUnit}${pack.unit}`;
+  }
+  const mult = (pack.inners||1) * (pack.unitsPerInner||1);
+  if(mult && mult!==1) return `${mult} x ${pack.qtyPerUnit}${pack.unit}`;
+  return `${pack.qtyPerUnit}${pack.unit}`;
+}
+async function quickVerify(productId){
+  const p = S.products.find(x=>x.id===productId);
+  const c = computeProduct(p);
+  if(!c.pack) { openPackEditor(productId); return; }
+  const key = overrideKey(p.supplier, p.sku);
+  const sourceText = (p.packText && p.packText.trim()) ? p.packText : p.description;
+  S.overrides[key] = {pack:c.pack, verifiedAt:new Date().toISOString(), descriptionAtVerification: sourceText};
+  await persist("overrides");
+  showToast("Verified "+p.supplier+" / "+p.sku);
+  render();
+}
+async function setGroupField(group, field, value){
+  if(!S.groupSettings[group]) S.groupSettings[group] = {annualVolume:null, currentSupplierId:null};
+  S.groupSettings[group][field] = field==="annualVolume" ? (value===""?null:parseFloat(value)) : (value||null);
+  await persist("groups");
+  render();
+}
+async function setGroupForProduct(productId, group){
+  const p = S.products.find(x=>x.id===productId);
+  p.group = group;
+  await persist("products");
+  render();
+}
+function selectGroup(g){ S.selectedGroup=g; S.screen="compare"; render(); }
+function setScreen(s){ S.screen=s; S.selectedGroup=null; render(); }
+
+/* ---------------- IMPORT FLOW ---------------- */
+
+const TARGET_FIELDS = [
+  {key:"supplier", label:"Supplier", required:true},
+  {key:"sku", label:"Supplier SKU", required:true},
+  {key:"description", label:"Product Description", required:true},
+  {key:"outerPrice", label:"Outer Price", required:true},
+  {key:"packText", label:"Pack Description", required:false},
+  {key:"group", label:"Product Group", required:false},
+  {key:"currentSupplier", label:"Current Supplier flag", required:false},
+  {key:"annualVolume", label:"Annual Volume", required:false},
+];
+
+function handleFile(file){
+  const reader = new FileReader();
+  reader.onload = (e)=>{
+    const rows = parseCSV(e.target.result);
+    if(!rows.length){ showToast("Empty or unreadable CSV"); return; }
+    S.importHeaders = rows[0].map(h=>h.trim());
+    S.importRows = rows.slice(1);
+    // naive auto-map by fuzzy name match
+    const mapping = {};
+    TARGET_FIELDS.forEach(f=>{
+      const fn = f.key.toLowerCase();
+      let idx = -1;
+      if(fn==="outerprice"){
+        // A report with Lowest/Highest/Average price columns should default
+        // to Average (the real weighted price paid), never Highest or Lowest —
+        // those are best/worst single purchases, not a fair comparison price.
+        idx = S.importHeaders.findIndex(h=>h.toLowerCase().replace(/[^a-z]/g,"").includes("average"));
+        if(idx<0) idx = S.importHeaders.findIndex(h=>h.toLowerCase().replace(/[^a-z]/g,"").includes("price"));
+      } else {
+        idx = S.importHeaders.findIndex(h=>{
+          const hn = h.toLowerCase().replace(/[^a-z]/g,"");
+          if(fn==="sku") return hn.includes("sku");
+          if(fn==="packtext") return hn.includes("pack");
+          if(fn==="group") return hn.includes("group");
+          if(fn==="currentsupplier") return hn.includes("current")&&hn.includes("supplier");
+          if(fn==="annualvolume") return hn.includes("volume")||hn.includes("annual")||hn.includes("consumption");
+          return hn.includes(fn);
+        });
+      }
+      mapping[f.key] = idx>=0 ? idx : -1;
+    });
+    S.importMapping = mapping;
+    S.importStep = 1;
+    render();
+  };
+  reader.readAsText(file);
+}
+async function confirmImport(){
+  const req = TARGET_FIELDS.filter(f=>f.required);
+  for(const f of req){ if(S.importMapping[f.key] === -1){ showToast("Please map required field: "+f.label); return; } }
+  const idxOf = (k)=>S.importMapping[k];
+  const newProducts = [];
+  const groupVolumes = {};
+  S.importRows.forEach(row=>{
+    const get = (k)=> idxOf(k)>=0 ? (row[idxOf(k)]||"").trim() : "";
+    const priceRaw = get("outerPrice").replace(/[$,]/g,"");
+    const price = priceRaw==="" ? NaN : parseFloat(priceRaw);
+    const group = get("group") || "Ungrouped";
+    const p = {
+      id: cryptoId(),
+      supplier: get("supplier"),
+      sku: get("sku"),
+      description: get("description"),
+      packText: get("packText"),
+      group,
+      outerPrice: isNaN(price) ? 0 : price,
+    };
+    if(!p.supplier && !p.sku && !p.description) return;
+    newProducts.push(p);
+    const flag = get("currentSupplier").toLowerCase();
+    if(["y","yes","true","1","current"].includes(flag)){
+      if(!S.groupSettings[group]) S.groupSettings[group] = {annualVolume:null, currentSupplierId:null};
+      S.groupSettings[group].currentSupplierId = p.id;
+    }
+    const volRaw = get("annualVolume").replace(/[,]/g,"");
+    if(volRaw){
+      const v = parseFloat(volRaw);
+      if(!isNaN(v)) groupVolumes[group] = v;
+    }
+  });
+  Object.keys(groupVolumes).forEach(g=>{
+    if(!S.groupSettings[g]) S.groupSettings[g] = {annualVolume:null, currentSupplierId:null};
+    S.groupSettings[g].annualVolume = groupVolumes[g];
+  });
+  S.products = S.products.concat(newProducts);
+  await persist("all");
+  showToast(`Imported ${newProducts.length} products`);
+  S.importRows=null; S.importHeaders=null; S.importMapping=null; S.importStep=0;
+  S.screen = "products";
+  render();
+}
+function cancelImport(){ S.importRows=null; S.importHeaders=null; S.importMapping=null; S.importStep=0; render(); }
+
+/* ---------------- EXPORT ---------------- */
+
+function exportCSV(){
+  const header = ["Comparison Group","Supplier","SKU","Product","Pack","Outer Price","Total Canonical Quantity","Canonical Unit","Equalised Cost","Prediction Status","Current Supplier","Annual Volume","Estimated Annual Saving"];
+  const lines = [header.map(toCSVField).join(",")];
+  groupList().forEach(g=>{
+    const rows = groupRows(g);
+    const {valid} = sortedValidRows(rows);
+    const gs = S.groupSettings[g] || {};
+    const baseline = valid.find(r=>r.product.id===gs.currentSupplierId);
+    valid.concat(rows.filter(r=>r.calc.state!=="ok")).forEach(r=>{
+      const isCurrent = r.product.id === gs.currentSupplierId;
+      let saving = "";
+      if(baseline && gs.annualVolume && r.calc.state==="ok" && baseline.calc.state==="ok" && r.product.id!==baseline.product.id){
+        saving = ((baseline.calc.equalisedCost - r.calc.equalisedCost) * gs.annualVolume).toFixed(2);
+      }
+      lines.push([
+        g, r.product.supplier, r.product.sku, r.product.description,
+        describePack(r.pack) || r.product.packText || r.product.description,
+        r.product.outerPrice, r.calc.state==="ok"?r.calc.canonicalQty:"", r.calc.state==="ok"?r.calc.canonicalUnit:"",
+        r.calc.state==="ok"?r.calc.equalisedCost.toFixed(4):"", r.status, isCurrent?"Yes":"", gs.annualVolume||"", saving
+      ].map(toCSVField).join(","));
+    });
+  });
+  const blob = new Blob([lines.join("\n")], {type:"text/csv"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "group-cost-comparison.csv";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast("Exported comparison CSV");
+}
+
+/* ---------------- RENDER HELPERS ---------------- */
+
+function esc(s){ return (s===null||s===undefined) ? "" : String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+
+function statusBadge(c){
+  if(c.missingInfo) return `<span class="badge missing">Missing Info</span>`;
+  if(c.status==="verified") return `<span class="badge verified">Verified</span>`;
+  if(c.status==="predicted") return `<span class="badge predicted">Predicted</span>`;
+  return `<span class="badge review">Needs Review</span>`;
+}
+function packChip(c){
+  const dotClass = c.missingInfo ? "review" : (c.status==="verified" ? "verified" : (c.status==="predicted" ? "predicted" : "review"));
+  const label = c.pack ? describePack(c.pack) || "—" : (c.product.packText || c.product.description || "—");
+  return `<span class="pack-chip" onclick="openPackEditor('${c.product.id}')"><span class="dot ${dotClass}"></span>${esc(label)}</span>`;
+}
+
+function reviewCounts(){
+  const all = allComputed();
+  const needsReview = all.filter(c=>c.status==="needsReview" && !c.missingInfo);
+  const missing = all.filter(c=>c.missingInfo);
+  const unverified = all.filter(c=>c.status==="predicted" && !c.missingInfo);
+  const conflicts = findConflicts(all);
+  return {needsReview, missing, unverified, conflicts, total: new Set([...needsReview,...missing,...unverified,...conflicts].map(c=>c.product.id)).size};
+}
+function findConflicts(all){
+  // Light heuristic: description mentions a kg/L number that disagrees with the parsed canonical qty.
+  const out = [];
+  all.forEach(c=>{
+    if(c.calc.state!=="ok") return;
+    // Strip "A/B unit" piece-size ranges first — e.g. "170/190g", "200/300g" is
+    // standard per-piece portion notation, not a claim about the pack's total
+    // quantity. Treating the second number in a range as a conflicting pack
+    // total produced false positives on real data (barramundi/fillet portions).
+    const desc = c.product.description.replace(/\d+(?:\.\d+)?\s*\/\s*\d+(?:\.\d+)?\s*(KG|G|L|ML)\b/gi, "");
+    const descNums = (desc.match(/(\d+(?:\.\d+)?)\s*(KG|G|L|ML)\b/i)||[]);
+    if(descNums.length===3){
+      const val = parseFloat(descNums[1]);
+      const unit = normaliseUnitToken(descNums[2]);
+      if(unit){
+        const dim = UNIT_DIMENSION[unit];
+        if(CANONICAL_UNIT[dim]!==c.calc.canonicalUnit) return; // different dimension — not comparable, not a conflict signal
+        const asCanonical = TO_CANONICAL[unit](val);
+        const matchesTotal = Math.abs(asCanonical - c.calc.canonicalQty) <= 0.01;
+        // A description number can also legitimately describe ONE unit inside
+        // the pack rather than the pack's total — e.g. "600ml" on a bottle
+        // description where the pack is "24 x 0.6L" (14.4L total). That's the
+        // same fact stated at a different level, not a conflict. Check the
+        // pack's own per-unit quantity (qtyPerUnit) before flagging.
+        let matchesPerUnit = false;
+        if(c.pack && c.pack.qtyPerUnit && c.pack.unit && UNIT_DIMENSION[c.pack.unit]===dim){
+          const perUnitCanonical = TO_CANONICAL[c.pack.unit](c.pack.qtyPerUnit);
+          if(Math.abs(asCanonical - perUnitCanonical) <= 0.01) matchesPerUnit = true;
+        }
+        if(!matchesTotal && !matchesPerUnit){
+          out.push(c);
+        }
+      }
+    }
+  });
+  return out;
+}
+
+/* ---------------- SCREENS ---------------- */
+
+function buildStableSelector(el){
+  // Identifies an element across a full re-render using whichever data-*
+  // attributes it carries — good enough to be unique for every input in this app.
+  const attrs = ["data-action","data-id","data-group","data-field","data-draft","data-draft-price"];
+  const parts = [];
+  attrs.forEach(a=>{
+    if(el.hasAttribute(a)){
+      const v = String(el.getAttribute(a)).replace(/\\/g,"\\\\").replace(/"/g,'\\"');
+      parts.push(`[${a}="${v}"]`);
+    }
+  });
+  if(!parts.length) return null;
+  return el.tagName.toLowerCase()+parts.join("");
+}
+
+function render(){
+  const app = document.getElementById("app");
+  if(!S.ready){ app.innerHTML = `<div style="padding:60px;color:#4B564F;">Loading…</div>`; return; }
+
+  // Every render rebuilds the whole page's HTML (it's the simplest way to keep
+  // this single-file app correct), which would otherwise throw the browser's
+  // scroll position back to the top on every edit. Capture and restore it so
+  // editing a product deep in a long list doesn't bounce you back to the top.
+  const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+  const prevOverlay = document.querySelector(".overlay");
+  const overlayScrollTop = prevOverlay ? prevOverlay.scrollTop : null;
+
+  // Same problem, worse symptom: rebuilding the DOM also destroys whatever
+  // input currently has focus — so typing anywhere re-renders on every
+  // keystroke (search-as-you-type, live pack-total recalculation both need
+  // that), which would otherwise kick you out of the field after one
+  // character. Capture focus + cursor position, restore both after rebuilding.
+  const active = document.activeElement;
+  let focusSelector = null, selStart = null, selEnd = null;
+  if(active && app.contains(active) && (active.tagName==="INPUT" || active.tagName==="SELECT" || active.tagName==="TEXTAREA")){
+    focusSelector = buildStableSelector(active);
+    if(typeof active.selectionStart === "number"){ selStart = active.selectionStart; selEnd = active.selectionEnd; }
+  }
+
+  const rc = reviewCounts();
+  app.innerHTML = `
+    ${railHTML(rc)}
+    <div class="main">
+      ${toplineHTML()}
+      ${S.screen==="compare" ? compareHTML() : ""}
+      ${S.screen==="review" ? reviewHTML(rc) : ""}
+      ${S.screen==="products" ? productsHTML() : ""}
+      ${S.screen==="import" ? importHTML() : ""}
+    </div>
+    ${S.editingProductId ? editorModalHTML() : ""}
+    ${S.toast ? `<div class="toast">${esc(S.toast)}</div>` : ""}
+  `;
+  wireInputs();
+
+  window.scrollTo(0, scrollY);
+  if(overlayScrollTop !== null){
+    const newOverlay = document.querySelector(".overlay");
+    if(newOverlay) newOverlay.scrollTop = overlayScrollTop;
+  }
+
+  if(focusSelector){
+    try{
+      const el = document.querySelector(focusSelector);
+      if(el){
+        el.focus({preventScroll:true});
+        if(selStart !== null && el.setSelectionRange){
+          try{ el.setSelectionRange(selStart, selEnd); }catch(e){}
+        }
+      }
+    }catch(e){ /* malformed selector from unusual input text — safe to skip */ }
+  }
+
+  // Belt-and-suspenders: some browsers re-settle layout a frame after a large
+  // DOM swap, which can nudge scroll position again after we just fixed it.
+  requestAnimationFrame(()=>{ window.scrollTo(0, scrollY); });
+}
+
+function railHTML(rc){
+  const nav = [
+    {id:"compare", label:"Compare"},
+    {id:"review", label:"Review", count: rc.total},
+    {id:"products", label:"Products"},
+    {id:"import", label:"Import"},
+  ];
+  return `
+  <div class="rail">
+    <div class="rail-brand">
+      <div><span class="mark"></span><span class="name">Group Cost Normaliser</span></div>
+      <div class="sub">v0.1 prototype</div>
+    </div>
+    <div class="rail-nav">
+      ${nav.map(n=>`
+        <button class="rail-btn ${S.screen===n.id?'active':''}" onclick="setScreen('${n.id}')">
+          <span>${n.label}</span>
+          ${n.count!==undefined ? `<span class="count">${n.count}</span>` : ""}
+        </button>`).join("")}
+    </div>
+    <div class="rail-foot">
+      <div class="sub" style="margin-bottom:2px;">Prototype data</div>
+      <button onclick="loadDemo()">Load Demo Data</button>
+      <button class="danger" onclick="confirmReset()">Reset Prototype</button>
+      <div style="font-size:10px; color:#7C8F80; margin-top:10px; line-height:1.4;">Saved in this browser only — not shared with other devices or people.</div>
+    </div>
+  </div>`;
+}
+
+function toplineHTML(){
+  const titles = {compare:"Compare", review:"Review", products:"Products", import:"Import"};
+  const metas = {
+    compare:"Like-for-like supplier cost comparison, by group.",
+    review:"Everything that needs a human decision.",
+    products:"Full master list of every supplier product.",
+    import:"Bring in supplier pricing from CSV.",
+  };
+  return `<div class="topline"><div><h1>${titles[S.screen]}</h1></div><div class="meta">${metas[S.screen]}</div></div>`;
+}
+
+/* ---- Compare ---- */
+function compareHTML(){
+  if(S.selectedGroup) return compareGroupHTML(S.selectedGroup);
+  const groups = groupList();
+  const all = allComputed();
+  const groupsWithMultiple = groups.filter(g=>new Set(groupRows(g).map(r=>(r.product.supplier||"").trim().toUpperCase())).size>1).length;
+  const rc = reviewCounts();
+  let totalOpportunity = 0;
+  groups.forEach(g=>{
+    const rows = groupRows(g); const {valid} = sortedValidRows(rows);
+    const gs = S.groupSettings[g]||{};
+    const baseline = valid.find(r=>r.product.id===gs.currentSupplierId);
+    const best = valid[0];
+    if(baseline && best && gs.annualVolume && best.product.id!==baseline.product.id){
+      const diff = baseline.calc.equalisedCost - best.calc.equalisedCost;
+      if(diff>0) totalOpportunity += diff*gs.annualVolume;
+    }
+  });
+
+  const summary = `
+    <div class="summary-strip">
+      <div class="summary-card"><div class="v num">${groups.length}</div><div class="l">Comparison groups</div></div>
+      <div class="summary-card"><div class="v num">${groupsWithMultiple}</div><div class="l">Groups with multiple suppliers</div></div>
+      <div class="summary-card review"><div class="v num">${rc.total}</div><div class="l">Products needing review</div></div>
+      <div class="summary-card opportunity"><div class="v num">${totalOpportunity>0?fmtCurrency(totalOpportunity):"—"}</div><div class="l">Estimated annual opportunity</div></div>
+    </div>`;
+
+  if(!groups.length){
+    return summary + `<div class="panel"><div class="empty">
+      No products yet. Load the sample dataset to see how the comparison works, or import your own supplier CSV.
+      <br/><button class="pill-btn primary" onclick="loadDemo()">Load Demo Data</button>
+      <button class="pill-btn" onclick="setScreen('import')">Import CSV</button>
+    </div></div>`;
+  }
+
+  const cards = groups.map(g=>{
+    const rows = groupRows(g); const {valid} = sortedValidRows(rows);
+    const best = valid[0];
+    const gs = S.groupSettings[g]||{};
+    const baseline = valid.find(r=>r.product.id===gs.currentSupplierId);
+    let savingNote = "";
+    if(baseline && best && gs.annualVolume && best.product.id!==baseline.product.id){
+      const diff = baseline.calc.equalisedCost-best.calc.equalisedCost;
+      if(diff>0) savingNote = `<div class="gbest">Potential saving: ${fmtCurrency(diff*gs.annualVolume)}/yr</div>`;
+    }
+    const reviewInGroup = rows.filter(r=>r.status==="needsReview"||r.missingInfo).length;
+    return `<button class="group-card" onclick="selectGroup('${esc(g)}')">
+      <div class="gname">${esc(g)}</div>
+      <div class="grow"><span>${rows.length} supplier option${rows.length===1?"":"s"}</span>${best?`<span class="num">${fmtEqualised(best.calc.equalisedCost, best.calc.canonicalUnit)}</span>`:""}</div>
+      ${savingNote}
+      ${reviewInGroup ? `<div class="gwarn">${reviewInGroup} need${reviewInGroup===1?"s":""} review</div>` : ""}
+    </button>`;
+  }).join("");
+
+  return summary + `<div class="group-grid">${cards}</div>`;
+}
+
+function compareGroupHTML(g){
+  const rows = groupRows(g);
+  const {valid, invalid} = sortedValidRows(rows);
+  const gs = S.groupSettings[g] || {annualVolume:null, currentSupplierId:null};
+  const baseline = valid.find(r=>r.product.id===gs.currentSupplierId);
+  const best = valid[0];
+
+  const supplierOptions = rows.map(r=>`<option value="${r.product.id}" ${gs.currentSupplierId===r.product.id?"selected":""}>${esc(r.product.supplier)} — ${esc(r.product.sku)}</option>`).join("");
+
+  const bodyRows = valid.map((r,i)=>{
+    const isBest = i===0;
+    const isCurrent = r.product.id===gs.currentSupplierId;
+    let diffNote = "";
+    if(baseline && r.product.id!==baseline.product.id && baseline.calc.state==="ok"){
+      const diff = r.calc.equalisedCost-baseline.calc.equalisedCost;
+      const cls = diff<0 ? "pos" : "";
+      diffNote = `<div class="diff-note ${cls}">${diff<0?"−":"+"}${fmtEqualised(Math.abs(diff), r.calc.canonicalUnit)} vs current</div>`;
+    }
+    let annualCell = "—";
+    if(baseline && gs.annualVolume && r.product.id!==baseline.product.id){
+      const diff = baseline.calc.equalisedCost-r.calc.equalisedCost;
+      annualCell = diff>0.0001 ? `<span style="color:var(--save); font-weight:600;">Save ${fmtCurrency(diff*gs.annualVolume)}</span>` : (diff<-0.0001 ? `<span style="color:var(--danger);">Costs ${fmtCurrency(-diff*gs.annualVolume)} more</span>` : "—");
+    } else if(isCurrent){ annualCell = "Current"; }
+    return `<tr class="${isBest?'best-row':''}">
+      <td>${esc(r.product.supplier)}<div style="font-size:11px;color:var(--ink-soft);">${esc(r.product.sku)}</div></td>
+      <td style="max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${esc(r.product.description)}">${esc(r.product.description)}</td>
+      <td>${packChip(r)} ${statusBadge(r)}</td>
+      <td class="right num-cell">${fmtCurrency(r.product.outerPrice)}</td>
+      <td class="right num-cell"><b>${fmtEqualised(r.calc.equalisedCost, r.calc.canonicalUnit)}</b>${diffNote}</td>
+      <td>${isCurrent ? `<span class="badge" style="background:var(--current-bg); color:var(--current);">Current Supplier</span>` : (isBest?`<span class="badge verified">Best Price</span>`:"")}</td>
+      <td class="right num-cell">${annualCell}</td>
+    </tr>`;
+  }).join("");
+
+  const invalidRows = invalid.map(r=>`<tr>
+      <td>${esc(r.product.supplier)}<div style="font-size:11px;color:var(--ink-soft);">${esc(r.product.sku)}</div></td>
+      <td style="max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${esc(r.product.description)}">${esc(r.product.description)}</td>
+      <td>${packChip(r)} ${statusBadge(r)}</td>
+      <td class="right num-cell">${fmtCurrency(r.product.outerPrice)}</td>
+      <td class="right" colspan="3" style="color:var(--danger); font-size:12.5px;">${esc(r.calc.error||"Cannot calculate")}</td>
+    </tr>`).join("");
+
+  return `
+    <button class="pill-btn ghost" onclick="setScreen('compare')" style="margin-bottom:14px;">← All groups</button>
+    <div class="panel">
+      <div class="panel-head">
+        <h2>${esc(g)}</h2>
+        <div class="hint">${rows.length} supplier option${rows.length===1?"":"s"}</div>
+      </div>
+      <div class="filters" style="align-items:flex-end;">
+        <div>
+          <label style="display:block;font-size:11px;color:var(--ink-soft);margin-bottom:3px;">Current supplier</label>
+          <select data-action="set-current" data-group="${esc(g)}" style="min-width:220px;">
+            <option value="">— not set —</option>
+            ${supplierOptions}
+          </select>
+        </div>
+        <div>
+          <label style="display:block;font-size:11px;color:var(--ink-soft);margin-bottom:3px;">Annual group usage (${valid[0]?valid[0].calc.canonicalUnit:'units'})</label>
+          <input type="number" min="0" data-action="set-volume" data-group="${esc(g)}" value="${gs.annualVolume ?? ''}" placeholder="e.g. 22400" style="width:150px;"/>
+        </div>
+        <div class="hint" style="align-self:center;">Estimated — used for the Annual Impact column only.</div>
+      </div>
+      <table>
+        <thead><tr><th>Supplier</th><th>Product</th><th>Pack</th><th class="right">Outer Price</th><th class="right">Equalised</th><th>Status</th><th class="right">Annual Impact</th></tr></thead>
+        <tbody>${bodyRows}${invalidRows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+/* ---- Review ---- */
+function reviewHTML(rc){
+  const section = (title, hint, list, renderRow) => `
+    <div class="panel">
+      <div class="panel-head"><h2>${title} <span class="hint" style="font-weight:400;">(${list.length})</span></h2><div class="hint">${hint}</div></div>
+      ${list.length ? `<table><tbody>${list.map(renderRow).join("")}</tbody></table>` : `<div class="empty">Nothing here right now.</div>`}
+    </div>`;
+
+  const rowNeedsReview = c => `<tr><td style="width:38%;">${esc(c.product.description)}<div style="font-size:11px;color:var(--ink-soft);">${esc(c.product.supplier)} · ${esc(c.product.sku)}</div></td>
+    <td>${esc(c.product.packText || "(no pack text)")}</td>
+    <td class="right">${statusBadge(c)}</td>
+    <td class="right"><button class="pill-btn" onclick="openPackEditor('${c.product.id}')">Edit</button></td></tr>`;
+
+  const rowMissing = c => `<tr><td style="width:38%;">${esc(c.product.description)}<div style="font-size:11px;color:var(--ink-soft);">${esc(c.product.supplier)} · ${esc(c.product.sku)}</div></td>
+    <td style="color:var(--danger);">${esc(c.calc.error||"Cannot calculate")}</td>
+    <td class="right">${statusBadge(c)}</td>
+    <td class="right"><button class="pill-btn" onclick="openPackEditor('${c.product.id}')">Edit</button></td></tr>`;
+
+  const rowUnverified = c => `<tr><td style="width:38%;">${esc(c.product.description)}<div style="font-size:11px;color:var(--ink-soft);">${esc(c.product.supplier)} · ${esc(c.product.sku)}</div></td>
+    <td>${packChip(c)}</td>
+    <td class="right num-cell">${fmtEqualised(c.calc.equalisedCost, c.calc.canonicalUnit)}</td>
+    <td class="right"><button class="pill-btn save" onclick="quickVerify('${c.product.id}')">Verify</button><button class="pill-btn" onclick="openPackEditor('${c.product.id}')">Edit</button></td></tr>`;
+
+  const rowConflict = c => `<tr><td style="width:38%;">${esc(c.product.description)}<div style="font-size:11px;color:var(--ink-soft);">${esc(c.product.supplier)} · ${esc(c.product.sku)}</div></td>
+    <td style="color:var(--review);">Description implies a different quantity than the pack field</td>
+    <td class="right">${statusBadge(c)}</td>
+    <td class="right"><button class="pill-btn" onclick="openPackEditor('${c.product.id}')">Edit</button></td></tr>`;
+
+  return `
+    ${section("Needs Review","Pack structure can't be confidently determined.", rc.needsReview, rowNeedsReview)}
+    ${section("Missing Information","Normalisation can't be calculated yet.", rc.missing, rowMissing)}
+    ${section("Conflicts","Imported or inferred information disagrees.", rc.conflicts, rowConflict)}
+    ${section("Unverified Predictions","Looks right — confirm to lock it in.", rc.unverified, rowUnverified)}
+  `;
+}
+
+/* ---- Products ---- */
+function productsHTML(){
+  const groups = groupList();
+  const f = S.filters;
+  let rows = allComputed();
+  if(f.search){ const s=f.search.toLowerCase(); rows = rows.filter(c=>(c.product.description+c.product.sku+c.product.supplier).toLowerCase().includes(s)); }
+  if(f.supplier) rows = rows.filter(c=>c.product.supplier===f.supplier);
+  if(f.group) rows = rows.filter(c=>c.product.group===f.group);
+  if(f.status) rows = rows.filter(c=> f.status==="missing" ? c.missingInfo : (!c.missingInfo && c.status===f.status));
+  rows = rows.slice().sort((a,b)=>{
+    const av = a.calc.state==="ok" ? a.calc.equalisedCost : Infinity;
+    const bv = b.calc.state==="ok" ? b.calc.equalisedCost : Infinity;
+    return av-bv;
+  });
+  const suppliers = Array.from(new Set(S.products.map(p=>p.supplier))).sort();
+
+  const body = rows.map(c=>`<tr>
+    <td>${esc(c.product.supplier)}</td>
+    <td class="num-cell">${esc(c.product.sku)}</td>
+    <td>${esc(c.product.description)}</td>
+    <td><input type="text" class="group-input" list="gcn-groups-datalist" data-action="set-group" data-id="${c.product.id}" value="${esc(c.product.group||'Ungrouped')}" placeholder="Ungrouped"/></td>
+    <td>${packChip(c)}</td>
+    <td class="right num-cell">${fmtCurrency(c.product.outerPrice)}</td>
+    <td class="right num-cell">${c.calc.state==="ok"?fmtEqualised(c.calc.equalisedCost,c.calc.canonicalUnit):`<span style="color:var(--danger);">${esc(c.calc.error)}</span>`}</td>
+    <td>${statusBadge(c)}</td>
+    <td class="right">
+      ${c.status!=="verified" && c.pack ? `<button class="pill-btn ghost" onclick="quickVerify('${c.product.id}')">Verify</button>` : ""}
+      <button class="pill-btn ghost" onclick="openPackEditor('${c.product.id}')">Edit</button>
+    </td>
+  </tr>`).join("");
+
+  return `<div class="panel">
+    <datalist id="gcn-groups-datalist">${groups.map(g=>`<option value="${esc(g)}">`).join("")}</datalist>
+    <div class="filters">
+      <input type="text" placeholder="Search description, SKU, supplier…" data-action="search" value="${esc(f.search)}"/>
+      <select data-action="filter-supplier"><option value="">All suppliers</option>${suppliers.map(s=>`<option value="${esc(s)}" ${f.supplier===s?"selected":""}>${esc(s)}</option>`).join("")}</select>
+      <select data-action="filter-group"><option value="">All groups</option>${groups.map(g=>`<option value="${esc(g)}" ${f.group===g?"selected":""}>${esc(g)}</option>`).join("")}</select>
+      <select data-action="filter-status">
+        <option value="">All statuses</option>
+        <option value="verified" ${f.status==='verified'?'selected':''}>Verified</option>
+        <option value="predicted" ${f.status==='predicted'?'selected':''}>Predicted</option>
+        <option value="needsReview" ${f.status==='needsReview'?'selected':''}>Needs Review</option>
+        <option value="missing" ${f.status==='missing'?'selected':''}>Missing Information</option>
+      </select>
+      <button class="pill-btn" style="margin-left:auto;" onclick="exportCSV()">Export CSV</button>
+    </div>
+    <div class="hint" style="padding:0 16px 10px 16px;">Type a new name in Group to split products out of a broad import category — e.g. change "SFRO" to "Squid" for just the squid lines. Matching names (exact, across suppliers) are what makes two products comparable.</div>
+    ${rows.length ? `<table>
+      <thead><tr><th>Supplier</th><th>SKU</th><th>Description</th><th>Group</th><th>Pack</th><th class="right">Outer Price</th><th class="right">Equalised</th><th>Status</th><th></th></tr></thead>
+      <tbody>${body}</tbody>
+    </table>` : `<div class="empty">No products match. <button class="pill-btn primary" onclick="loadDemo()">Load Demo Data</button></div>`}
+  </div>`;
+}
+
+/* ---- Import ---- */
+function importHTML(){
+  if(!S.importRows){
+    return `<div class="panel"><div class="dropzone" id="dropzone">
+      <div style="font-size:14px; margin-bottom:8px;">Drop a supplier CSV here, or</div>
+      <button class="pill-btn primary" onclick="document.getElementById('fileInput').click()">Choose file</button>
+      <input type="file" id="fileInput" accept=".csv"/>
+      <div class="hint" style="margin-top:14px;">Required: Supplier, Supplier SKU, Product Description, Outer Price.<br/>Optional: Pack Description, Product Group, Current Supplier flag, Annual Volume.</div>
+    </div></div>`;
+  }
+  const rowsPreview = S.importRows.slice(0,5);
+  return `<div class="panel">
+    <div class="panel-head"><h2>Map columns</h2><div class="hint">${S.importRows.length} rows detected</div></div>
+    <div class="map-grid">
+      ${TARGET_FIELDS.map(f=>`
+        <div class="map-row">
+          <label>${f.label}${f.required?'<span class="req">Required</span>':''}</label>
+          <select data-action="map-field" data-field="${f.key}">
+            <option value="-1" ${S.importMapping[f.key]===-1?"selected":""}>— none —</option>
+            ${S.importHeaders.map((h,i)=>`<option value="${i}" ${S.importMapping[f.key]===i?"selected":""}>${esc(h)}</option>`).join("")}
+          </select>
+        </div>`).join("")}
+    </div>
+    <div class="panel-head" style="border-top:1px solid var(--line-soft); border-bottom:none;"><h2 style="font-size:12.5px; color:var(--ink-soft); font-weight:600; text-transform:uppercase; letter-spacing:.4px;">Preview</h2></div>
+    <table><thead><tr>${S.importHeaders.map(h=>`<th>${esc(h)}</th>`).join("")}</tr></thead>
+    <tbody>${rowsPreview.map(r=>`<tr>${r.map(c=>`<td>${esc(c)}</td>`).join("")}</tr>`).join("")}</tbody></table>
+    <div class="modal-foot" style="border-top:1px solid var(--line-soft);">
+      <button class="pill-btn" onclick="cancelImport()">Cancel</button>
+      <button class="pill-btn primary" onclick="confirmImport()">Import ${S.importRows.length} products</button>
+    </div>
+  </div>`;
+}
+
+/* ---- Pack editor modal ---- */
+function editorModalHTML(){
+  const p = S.products.find(x=>x.id===S.editingProductId);
+  const c = computeProduct(p);
+  const d = S.editDraft;
+  const calc = calculateEqualisedCost(d, p.outerPrice);
+  const ov = S.overrides[overrideKey(p.supplier,p.sku)];
+
+  return `<div class="overlay" onclick="if(event.target===this) closeEditor()">
+    <div class="modal">
+      <div class="modal-head">
+        <div class="kicker">Pack Structure</div>
+        <h3>${esc(p.description)}</h3>
+        <div class="sku">${esc(p.supplier)} · ${esc(p.sku)}</div>
+      </div>
+      <div class="modal-body">
+        ${p.packText ? `<div class="src-note">Supplier pack text: <b>${esc(p.packText)}</b> ${c.reason?`— <span style="color:var(--ink-soft);">${esc(c.reason)}</span>`:""}</div>` : ""}
+        ${ov ? `<div class="src-note" style="background:var(--save-bg); color:var(--save);">Verified ${new Date(ov.verifiedAt).toLocaleDateString()}${c.descriptionChanged ? ' — <b>description has changed since this was verified.</b>' : ''}</div>` : ""}
+        <div class="field-row">
+          <div class="field"><label>Outers</label><input type="text" inputmode="numeric" data-draft="outers" value="${esc(S.editDraftRaw.outers)}"/></div>
+          <div class="field"><label>Inners per outer</label><input type="text" inputmode="numeric" data-draft="inners" value="${esc(S.editDraftRaw.inners)}"/></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>Units per inner</label><input type="text" inputmode="numeric" data-draft="unitsPerInner" value="${esc(S.editDraftRaw.unitsPerInner)}"/></div>
+          <div class="field"><label>Quantity per unit</label><input type="text" inputmode="decimal" data-draft="qtyPerUnit" value="${esc(S.editDraftRaw.qtyPerUnit)}"/></div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Unit</label>
+            <select data-draft="unit">
+              <option value="">— select —</option>
+              <optgroup label="Mass">
+                <option value="MG" ${d.unit==='MG'?'selected':''}>mg</option>
+                <option value="G" ${d.unit==='G'?'selected':''}>g</option>
+                <option value="KG" ${d.unit==='KG'?'selected':''}>kg</option>
+              </optgroup>
+              <optgroup label="Volume">
+                <option value="ML" ${d.unit==='ML'?'selected':''}>mL</option>
+                <option value="L" ${d.unit==='L'?'selected':''}>L</option>
+              </optgroup>
+              <optgroup label="Count">
+                <option value="EACH" ${d.unit==='EACH'?'selected':''}>each</option>
+              </optgroup>
+            </select>
+          </div>
+          <div class="field"><label>Outer price</label><input type="text" inputmode="decimal" data-draft-price="1" value="${esc(S.editDraftRaw.outerPrice)}"/></div>
+        </div>
+        <div class="ladder">OUTER <b>${d.outers ?? '?'}</b> → INNER <b>${d.inners ?? '?'}</b> → UNIT <b>${d.unitsPerInner ?? '?'}</b> → QTY <b>${d.qtyPerUnit ?? '?'}${d.unit?(' '+d.unit.toLowerCase()):''}</b></div>
+        <div class="derived">
+          <div class="row total"><span>Derived total</span><span class="v num">${calc.state==='ok'?fmtQty(calc.canonicalQty, calc.canonicalUnit):'—'}</span></div>
+          <div class="row cost"><span>Equalised cost</span><span class="v num">${calc.state==='ok'?fmtEqualised(calc.equalisedCost, calc.canonicalUnit):'—'}</span></div>
+          ${calc.state!=='ok' ? `<div class="warn">${esc(calc.error)}</div>` : ""}
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="pill-btn" onclick="closeEditor()">Cancel</button>
+        <button class="pill-btn" onclick="saveDraft(false)">Save as Predicted</button>
+        <button class="pill-btn save" ${calc.state!=='ok'?'disabled':''} onclick="saveDraft(true)">Save &amp; Verify</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ---------------- WIRING ---------------- */
+
+function wireInputs(){
+  const dz = document.getElementById("dropzone");
+  if(dz){
+    dz.addEventListener("dragover", e=>{ e.preventDefault(); dz.style.borderColor="var(--current)"; });
+    dz.addEventListener("dragleave", ()=>{ dz.style.borderColor=""; });
+    dz.addEventListener("drop", e=>{ e.preventDefault(); dz.style.borderColor=""; if(e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); });
+  }
+  const fi = document.getElementById("fileInput");
+  if(fi) fi.addEventListener("change", e=>{ if(e.target.files[0]) handleFile(e.target.files[0]); });
+
+  document.querySelectorAll('[data-draft]').forEach(el=>{
+    el.addEventListener("input", ()=> updateDraft(el.getAttribute("data-draft"), el.value));
+  });
+  document.querySelectorAll('[data-draft-price]').forEach(el=>{
+    el.addEventListener("input", ()=>{
+      const p = S.products.find(x=>x.id===S.editingProductId);
+      S.editDraftRaw.outerPrice = el.value;
+      p.outerPrice = el.value===""?0:parseFloat(el.value);
+      render();
+    });
+  });
+  document.querySelectorAll('[data-action="search"]').forEach(el=>el.addEventListener("input", ()=>{ S.filters.search=el.value; render(); }));
+  document.querySelectorAll('[data-action="filter-supplier"]').forEach(el=>el.addEventListener("change", ()=>{ S.filters.supplier=el.value; render(); }));
+  document.querySelectorAll('[data-action="filter-group"]').forEach(el=>el.addEventListener("change", ()=>{ S.filters.group=el.value; render(); }));
+  document.querySelectorAll('[data-action="filter-status"]').forEach(el=>el.addEventListener("change", ()=>{ S.filters.status=el.value; render(); }));
+  document.querySelectorAll('[data-action="set-group"]').forEach(el=>{
+    el.addEventListener("change", ()=>setGroupForProduct(el.getAttribute("data-id"), el.value.trim() || "Ungrouped"));
+    el.addEventListener("keydown", e=>{ if(e.key==="Enter") el.blur(); });
+  });
+  document.querySelectorAll('[data-action="set-current"]').forEach(el=>el.addEventListener("change", ()=>setGroupField(el.getAttribute("data-group"), "currentSupplierId", el.value)));
+  document.querySelectorAll('[data-action="set-volume"]').forEach(el=>el.addEventListener("change", ()=>setGroupField(el.getAttribute("data-group"), "annualVolume", el.value)));
+  document.querySelectorAll('[data-action="map-field"]').forEach(el=>el.addEventListener("change", ()=>{ S.importMapping[el.getAttribute("data-field")] = parseInt(el.value); }));
+}
+
+function confirmReset(){
+  if(confirm("This will permanently delete all local prototype data (products, verifications, group settings). Continue?")) resetPrototype();
+}
+
+/* ---------------- INIT ---------------- */
+loadState();
+</script>
+</body>
+</html>
