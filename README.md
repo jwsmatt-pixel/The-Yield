@@ -4,7 +4,7 @@
 
 ## Start here
 
-**Open `The-Yield_v10_CURRENT.html`** — that's the actual app, always sitting at the root of this folder so it's never buried. Double-click it, or drop it into a browser. No install, no server, no account.
+**Open `html`** — that's the actual app, always sitting at the root of this folder so it's never buried. Double-click it, or drop it into a browser. No install, no server, no account.
 
 Everything else in this folder supports that one file: how it was built, why it works the way it does, how to test it, and what's deliberately not in it yet.
 
