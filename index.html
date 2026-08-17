@@ -534,6 +534,29 @@ async function resetPrototype(){
 
 /* ---------------- COMPUTE (Trust hierarchy: Verified override > Parser prediction > Needs Review) ---------------- */
 
+// Single source of truth for "what text should this product's pack be parsed from".
+// Tries packText first, but falls back to description not just when packText is
+// blank, but also when packText is non-empty and simply fails to parse.
+function resolvePackSource(product){
+  const packText = product.packText;
+  const hasPackText = !!(packText && String(packText).trim());
+  const packAttempt = hasPackText ? parsePackDescription(packText) : null;
+  if(packAttempt && packAttempt.pack){
+    return {pack:packAttempt.pack, confidence:packAttempt.confidence, reason:packAttempt.reason, sourceText:packText, sourceField:"packText"};
+  }
+  const descAttempt = parsePackDescription(product.description);
+  if(descAttempt.pack){
+    return {pack:descAttempt.pack, confidence:descAttempt.confidence, reason:descAttempt.reason, sourceText:product.description, sourceField:"description"};
+  }
+  return {
+    pack:null,
+    confidence:"low",
+    reason: hasPackText ? packAttempt.reason : descAttempt.reason,
+    sourceText: hasPackText ? packText : product.description,
+    sourceField:"none"
+  };
+}
+
 function computeProduct(p){
   const key = overrideKey(p.supplier, p.sku);
   const ov = S.overrides[key];
@@ -541,14 +564,13 @@ function computeProduct(p){
 
   if(ov){
     pack = ov.pack; status = "verified"; confidence = "high"; reason = "Verified by user";
-    const currentSourceText = (p.packText && p.packText.trim()) ? p.packText : p.description;
+    const currentSourceText = resolvePackSource(p).sourceText;
     if(ov.descriptionAtVerification !== undefined && ov.descriptionAtVerification !== currentSourceText){
       descriptionChanged = true;
     }
   } else {
-    const sourceText = (p.packText && p.packText.trim()) ? p.packText : p.description;
-    const parsed = parsePackDescription(sourceText);
-    pack = parsed.pack; confidence = parsed.confidence; reason = parsed.reason;
+    const resolved = resolvePackSource(p);
+    pack = resolved.pack; confidence = resolved.confidence; reason = resolved.reason;
     status = pack && confidence!=="low" ? "predicted" : "needsReview";
   }
 
@@ -701,7 +723,7 @@ async function saveDraft(verify){
   const pack = {...S.editDraft};
   if(verify){
     const key = overrideKey(p.supplier, p.sku);
-    const sourceText = (p.packText && p.packText.trim()) ? p.packText : p.description;
+    const sourceText = resolvePackSource(p).sourceText;
     S.overrides[key] = {pack, verifiedAt: new Date().toISOString(), descriptionAtVerification: sourceText};
     await persist("overrides");
     showToast("Pack structure verified — remembered for "+p.supplier+" / "+p.sku);
@@ -730,7 +752,7 @@ async function quickVerify(productId){
   const c = computeProduct(p);
   if(!c.pack) { openPackEditor(productId); return; }
   const key = overrideKey(p.supplier, p.sku);
-  const sourceText = (p.packText && p.packText.trim()) ? p.packText : p.description;
+  const sourceText = resolvePackSource(p).sourceText;
   S.overrides[key] = {pack:c.pack, verifiedAt:new Date().toISOString(), descriptionAtVerification: sourceText};
   await persist("overrides");
   showToast("Verified "+p.supplier+" / "+p.sku);
@@ -753,7 +775,7 @@ async function batchVerify(productIds){
     const c = computeProduct(p);
     if(!c.pack || c.status!=="predicted") return; // only confirm what's already Predicted — never Needs Review, never re-touch Verified
     const key = overrideKey(p.supplier, p.sku);
-    const sourceText = (p.packText && p.packText.trim()) ? p.packText : p.description;
+    const sourceText = resolvePackSource(p).sourceText;
     S.overrides[key] = {pack:c.pack, verifiedAt:new Date().toISOString(), descriptionAtVerification: sourceText};
     count++;
   });
