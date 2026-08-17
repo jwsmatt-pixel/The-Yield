@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>The Yield</title>
+<title>[SANDBOX] The Yield</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -134,6 +134,7 @@ a{color:inherit;}
 .panel-head h2{font-family:var(--font-heading); font-weight:600; font-size:24px; margin:0; line-height:1.15;}
 .panel-head .hint{font-size:12px; opacity:.7;}
 table{width:100%; border-collapse:collapse;}
+.table-scroll{overflow-x:auto; -webkit-overflow-scrolling:touch;}
 th{
   text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.08em; opacity:.6;
   font-weight:600; padding:var(--space-2) 10px; border-bottom:1px solid var(--color-divider); background:transparent;
@@ -258,9 +259,86 @@ tr.best-row{background:var(--color-accent-2-100);}
   padding:12px 22px; border-radius:999px; font-size:13px; z-index:80; box-shadow:var(--shadow-md);
 }
 .small-btn-inline{font-size:11px; color:var(--color-accent-700); background:none; border:none; text-decoration:underline; padding:0;}
+
+/* ============ MOBILE ============
+   Below this width the fixed-width sidebar was eating most of the
+   screen — headings truncating mid-word, the Products table invisible
+   off-canvas, the Import button cut off. The sidebar collapses from a
+   tall left column into a compact top bar with a wrapped, horizontal
+   nav row; everything else scales down and stacks to single columns.
+   Desktop layout above this breakpoint is completely untouched. */
+@media (max-width: 768px){
+  /* Horizontal padding tightened throughout this block on request — every
+     value below trims LEFT/RIGHT only, vertical spacing is untouched. */
+  #app{flex-direction:column; padding:var(--space-3) 8px; gap:var(--space-3); min-height:0;}
+  .rail{width:100%; flex-direction:column; padding:0;}
+  .rail-brand{padding:var(--space-3) 10px 10px;}
+  .rail-brand .name{font-size:19px;}
+  .rail-nav{flex-direction:row; flex-wrap:wrap; padding:0 8px var(--space-2); gap:6px;}
+  .rail-btn{flex:1 1 auto; justify-content:center; min-height:44px; font-size:14px; padding:10px 10px;}
+  .rail-foot{margin-top:0; padding:var(--space-3) 10px; border-top:1px solid var(--color-divider); display:flex; flex-direction:row; flex-wrap:wrap; gap:8px; align-items:center;}
+  .rail-foot button{width:auto; flex:1 1 auto; margin-top:0; min-height:40px;}
+  .rail-foot .sub{width:100%; margin-bottom:2px;}
+
+  .main{padding:0;}
+  .topline{margin-bottom:var(--space-4);}
+  .topline h1{font-size:26px;}
+  .topline .meta{font-size:12px;}
+
+  /* two-up instead of five-across, still scannable without becoming a single long stack */
+  .summary-strip{grid-template-columns:repeat(2, 1fr); gap:8px; margin-bottom:var(--space-4);}
+  .summary-card{padding:12px 10px;}
+  .summary-card .v{font-size:22px;}
+  .summary-card .l{font-size:11px; margin-top:6px;}
+
+  .group-grid{grid-template-columns:1fr;}
+  .group-card{padding:14px 12px;}
+  .group-card .gname{font-size:18px;}
+
+  /* the hero's 60px display number would overflow a phone width outright */
+  .annual-hero{padding:var(--space-4) 14px;}
+  .hero-num{font-size:34px;}
+  .hero-per{font-size:15px;}
+  .hero-monthly{font-size:12.5px;}
+  .hero-reason{font-size:12.5px;}
+
+  .panel-head{padding:12px 10px; flex-direction:column; align-items:flex-start; gap:8px;}
+  .panel-head h2{font-size:18px;}
+  table{font-size:12.5px;}
+  th, td{padding:8px 6px;}
+
+  /* the group-detail filters row and the pack-editor field-row both set
+     fixed pixel widths inline from JS — a class-level rule can't win
+     against an inline style, so these two are intentionally !important,
+     scoped only to this breakpoint */
+  .filters{flex-direction:column; align-items:stretch !important; padding:12px 10px; gap:10px;}
+  .filters > div{width:100% !important;}
+  .filters input, .filters select{width:100% !important;}
+  .group-input{width:100% !important;}
+
+  .field-row{flex-direction:column; gap:0;}
+  .map-grid{grid-template-columns:1fr; padding:12px 10px;}
+
+  .modal{margin:0 4px;}
+  .modal-head{padding:var(--space-4) 14px 0;}
+  .modal-head h3{font-size:21px;}
+  .modal-body{padding:var(--space-3) 14px var(--space-4);}
+  .derived .row.cost .v{font-size:22px;}
+  .ladder{font-size:11.5px;}
+
+  .dropzone{padding:var(--space-4) 14px;}
+  .dropzone-desktop-hint{display:none;}
+  .dropzone-mobile-hint{display:block !important;}
+  .dropzone .pill-btn.primary{width:100%; min-height:48px; font-size:15px;}
+  .pill-btn{min-height:40px;}
+  .badge{min-height:22px; display:inline-flex; align-items:center;}
+}
 </style>
 </head>
 <body>
+<div style="position:sticky; top:0; z-index:200; background:#B9772C; color:#fff; text-align:center; padding:6px 12px; font-family:'Figtree',system-ui,sans-serif; font-size:13px; font-weight:700; letter-spacing:.3px;">
+  ⚠ SANDBOX BUILD — experimental, not the stable version
+</div>
 <div id="app"></div>
 
 <script>
@@ -1037,7 +1115,7 @@ function railHTML(rc){
   <div class="rail">
     <div class="rail-brand">
       <div><span class="mark"></span><span class="name">The Yield</span></div>
-      <div class="sub">v0.1 prototype</div>
+      <div class="sub" style="color:#B9772C; font-weight:700;">v0.1 prototype · SANDBOX</div>
     </div>
     <div class="rail-nav">
       ${nav.map(n=>`
@@ -1272,10 +1350,12 @@ function compareGroupHTML(g){
         </div>
         ${volumeFieldsHTML}
       </div>
+      <div class="table-scroll">
       <table>
         <thead><tr><th>Supplier</th><th>Product</th><th>Pack</th><th class="right">Outer Price</th><th class="right">Equalised</th><th>Status</th><th class="right">Annual Impact</th></tr></thead>
         <tbody>${bodyRows}${invalidRows}</tbody>
       </table>
+      </div>
     </div>
   `;
 }
@@ -1287,7 +1367,7 @@ function reviewHTML(rc){
       <div class="panel-head"><h2>${title} <span class="hint" style="font-weight:400;">(${list.length})</span></h2>
         <div style="display:flex; align-items:center; gap:14px;">${headerAction ? headerAction(list) : ""}<div class="hint">${hint}</div></div>
       </div>
-      ${list.length ? `<table><tbody>${list.map(renderRow).join("")}</tbody></table>` : `<div class="empty">Nothing here right now.</div>`}
+      ${list.length ? `<div class="table-scroll"><table><tbody>${list.map(renderRow).join("")}</tbody></table></div>` : `<div class="empty">Nothing here right now.</div>`}
     </div>`;
 
   const rowNeedsReview = c => `<tr><td style="width:38%;">${esc(c.product.description)}<div style="font-size:11px;color:var(--ink-soft);">${esc(c.product.supplier)} · ${esc(c.product.sku)}</div></td>
@@ -1315,13 +1395,13 @@ function reviewHTML(rc){
   const currentSupplierConflictsPanel = rc.currentSupplierConflicts.length ? `
     <div class="panel">
       <div class="panel-head"><h2>Current Supplier Conflicts <span class="hint" style="font-weight:400;">(${rc.currentSupplierConflicts.length})</span></h2><div class="hint">More than one row was flagged current in the same import.</div></div>
-      <table><tbody>
+      <div class="table-scroll"><table><tbody>
         ${rc.currentSupplierConflicts.map(cc=>`<tr>
           <td style="width:32%;"><b>${esc(cc.group)}</b></td>
           <td>${cc.candidates.map(p=>`${esc(p.supplier)} · ${esc(p.sku)}`).join("<br/>")}</td>
           <td class="right"><button class="pill-btn save" onclick="selectGroup('${esc(cc.group)}')">Pick one on Compare</button></td>
         </tr>`).join("")}
-      </tbody></table>
+      </tbody></table></div>
     </div>` : "";
 
   return `
@@ -1389,10 +1469,10 @@ function productsHTML(){
       </div>`;
     })()}
     <div class="hint" style="padding:0 16px 10px 16px;">Type a new name in Group to split products out of a broad import category — e.g. change "SFRO" to "Squid" for just the squid lines. Matching names (exact, across suppliers) are what makes two products comparable.</div>
-    ${rows.length ? `<table>
+    ${rows.length ? `<div class="table-scroll"><table>
       <thead><tr><th>Supplier</th><th>SKU</th><th>Description</th><th>Group</th><th>Pack</th><th class="right">Outer Price</th><th class="right">Equalised</th><th>Status</th><th></th></tr></thead>
       <tbody>${body}</tbody>
-    </table>` : `<div class="empty">No products match. <button class="pill-btn primary" onclick="loadDemo()">Load Demo Data</button></div>`}
+    </table></div>` : `<div class="empty">No products match. <button class="pill-btn primary" onclick="loadDemo()">Load Demo Data</button></div>`}
   </div>`;
 }
 
@@ -1400,7 +1480,8 @@ function productsHTML(){
 function importHTML(){
   if(!S.importRows){
     return `<div class="panel"><div class="dropzone" id="dropzone">
-      <div style="font-size:14px; margin-bottom:8px;">Drop a supplier CSV here, or</div>
+      <div class="dropzone-desktop-hint" style="font-size:14px; margin-bottom:8px;">Drop a supplier CSV here, or</div>
+      <div class="dropzone-mobile-hint" style="font-size:14px; margin-bottom:8px; display:none;">Import a supplier CSV from your files, Downloads, or cloud storage</div>
       <button class="pill-btn primary" onclick="document.getElementById('fileInput').click()">Choose file</button>
       <input type="file" id="fileInput" accept=".csv"/>
       <div class="hint" style="margin-top:14px;">Required: Supplier, Supplier SKU, Product Description, Outer Price.<br/>Optional: Pack Description, Product Group, Current Supplier flag, Annual Usage.</div>
@@ -1420,8 +1501,8 @@ function importHTML(){
         </div>`).join("")}
     </div>
     <div class="panel-head" style="border-top:1px solid var(--line-soft); border-bottom:none;"><h2 style="font-size:12.5px; color:var(--ink-soft); font-weight:600; text-transform:uppercase; letter-spacing:.4px;">Preview</h2></div>
-    <table><thead><tr>${S.importHeaders.map(h=>`<th>${esc(h)}</th>`).join("")}</tr></thead>
-    <tbody>${rowsPreview.map(r=>`<tr>${r.map(c=>`<td>${esc(c)}</td>`).join("")}</tr>`).join("")}</tbody></table>
+    <div class="table-scroll"><table><thead><tr>${S.importHeaders.map(h=>`<th>${esc(h)}</th>`).join("")}</tr></thead>
+    <tbody>${rowsPreview.map(r=>`<tr>${r.map(c=>`<td>${esc(c)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
     <div class="modal-foot" style="border-top:1px solid var(--line-soft);">
       <button class="pill-btn" onclick="cancelImport()">Cancel</button>
       <button class="pill-btn primary" onclick="confirmImport()">Import ${S.importRows.length} products</button>
