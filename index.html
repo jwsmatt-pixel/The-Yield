@@ -1166,7 +1166,24 @@ function toplineHTML(){
   return `<div class="topline"><div><h1>${titles[S.screen]}</h1></div><div class="meta">${metas[S.screen]}</div></div>`;
 }
 
-/* ---- Compare ---- */
+/* ---- Compare ----
+ * compareSortMode is deliberately a plain module-level variable, not part of
+ * S: it's UI-only, must never be persisted, and always resets to "name" on
+ * a fresh page load — a plain `let` does that for free. */
+let compareSortMode = "name";
+
+function sortGroupsForCompare(groups, groupOpportunity, mode){
+  if(mode!=="savingAmount" && mode!=="savingPercent") return groups; // "name": groups is already A→Z from groupList()
+  const key = mode==="savingPercent" ? "percent" : "amount";
+  const withSaving = groups.filter(g=>groupOpportunity[g]);
+  const withoutSaving = groups.filter(g=>!groupOpportunity[g]); // already A→Z, no-saving groups always sort last
+  withSaving.sort((a,b)=>{
+    const diff = groupOpportunity[b][key] - groupOpportunity[a][key];
+    return diff!==0 ? diff : a.localeCompare(b);
+  });
+  return withSaving.concat(withoutSaving);
+}
+
 function compareHTML(){
   if(S.selectedGroup) return compareGroupHTML(S.selectedGroup);
   const groups = groupList();
@@ -1186,8 +1203,9 @@ function compareHTML(){
       const diff = baseline.calc.equalisedCost - best.calc.equalisedCost;
       if(diff>0){
         const amount = diff*annualVolume;
+        const percent = (diff/baseline.calc.equalisedCost)*100;
         const confidence = annualSavingConfidence(baseline, best);
-        entry = {amount, confidence};
+        entry = {amount, percent, confidence};
         if(confidence==="verified") verifiedOpportunity += amount; else indicativeOpportunity += amount;
       }
     }
@@ -1211,7 +1229,18 @@ function compareHTML(){
     </div></div>`;
   }
 
-  const cards = groups.map(g=>{
+  const sortControl = `
+    <div style="display:flex; align-items:center; gap:8px; margin:0 0 14px 0;">
+      <label style="font-size:12px; color:var(--ink-soft);">Sort by</label>
+      <select data-action="sort-compare" style="min-width:150px;">
+        <option value="name" ${compareSortMode==="name"?"selected":""}>Name</option>
+        <option value="savingAmount" ${compareSortMode==="savingAmount"?"selected":""}>Saving $</option>
+        <option value="savingPercent" ${compareSortMode==="savingPercent"?"selected":""}>Saving %</option>
+      </select>
+    </div>`;
+
+  const sortedGroups = sortGroupsForCompare(groups, groupOpportunity, compareSortMode);
+  const cards = sortedGroups.map(g=>{
     const rows = groupRows(g); const {valid} = sortedValidRows(rows);
     const best = valid[0];
     const entry = groupOpportunity[g];
@@ -1230,7 +1259,7 @@ function compareHTML(){
     </button>`;
   }).join("");
 
-  return summary + `<div class="group-grid">${cards}</div>`;
+  return summary + sortControl + `<div class="group-grid">${cards}</div>`;
 }
 
 function annualHeroHTML(g, gs, baseline, best, annualVolume, provenance){
@@ -1275,6 +1304,49 @@ function annualHeroHTML(g, gs, baseline, best, annualVolume, provenance){
     <div class="hero-monthly">≈ ${fmtCurrency(monthly)}/mo</div>
     ${provenanceLine}
     <div class="hero-reason">${reason}</div>
+  </div>`;
+}
+
+/**
+ * Mirrors annualHeroHTML's own gating exactly (same four checks, same order)
+ * so the scenario table only ever appears alongside the hero's real,
+ * non-empty saving state — never a guess at when that is.
+ */
+function heroHasFullSaving(baseline, best, annualVolume){
+  if(!baseline) return false;
+  if(!best || best.product.id===baseline.product.id) return false;
+  const diff = baseline.calc.equalisedCost - best.calc.equalisedCost;
+  if(diff<=0.0001) return false;
+  if(!annualVolume) return false;
+  return true;
+}
+
+function volumeScenarioHTML(baseline, best, annualVolume){
+  const diff = baseline.calc.equalisedCost - best.calc.equalisedCost;
+  const confidence = annualSavingConfidence(baseline, best);
+  const tierLabel = confidence==="verified" ? "Verified" : "Indicative";
+  const scenarios = [
+    {label:"½×", volume: annualVolume*0.5},
+    {label:"Current", volume: annualVolume},
+    {label:"2×", volume: annualVolume*2},
+    {label:"5×", volume: annualVolume*5},
+  ];
+  const rows = scenarios.map(s=>`<tr>
+      <td>${s.label}</td>
+      <td class="right num-cell">${fmtQty(s.volume, baseline.calc.canonicalUnit)}</td>
+      <td class="right num-cell">${fmtCurrency(diff*s.volume)}</td>
+    </tr>`).join("");
+  return `<div class="panel" style="margin-top:10px;">
+    <div class="panel-head">
+      <h2 style="font-size:14px;">Volume sensitivity</h2>
+      <span class="badge ${confidence==="verified"?"verified":"review"}">${tierLabel}</span>
+    </div>
+    <div class="table-scroll">
+    <table>
+      <thead><tr><th>Scenario</th><th class="right">Annual usage</th><th class="right">Estimated saving</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    </div>
   </div>`;
 }
 
@@ -1357,6 +1429,7 @@ function compareGroupHTML(g){
   return `
     <button class="pill-btn ghost" onclick="setScreen('compare')" style="margin-bottom:14px;">← All groups</button>
     ${annualHeroHTML(g, gs, baseline, best, annualVolume, provenance)}
+    ${heroHasFullSaving(baseline, best, annualVolume) ? volumeScenarioHTML(baseline, best, annualVolume) : ""}
     <div class="panel">
       <div class="panel-head">
         <h2>${esc(g)}</h2>
@@ -1622,6 +1695,7 @@ function wireInputs(){
   document.querySelectorAll('[data-action="filter-supplier"]').forEach(el=>el.addEventListener("change", ()=>{ S.filters.supplier=el.value; render(); }));
   document.querySelectorAll('[data-action="filter-group"]').forEach(el=>el.addEventListener("change", ()=>{ S.filters.group=el.value; render(); }));
   document.querySelectorAll('[data-action="filter-status"]').forEach(el=>el.addEventListener("change", ()=>{ S.filters.status=el.value; render(); }));
+  document.querySelectorAll('[data-action="sort-compare"]').forEach(el=>el.addEventListener("change", ()=>{ compareSortMode=el.value; render(); }));
   document.querySelectorAll('[data-action="set-group"]').forEach(el=>{
     el.addEventListener("change", ()=>setGroupForProduct(el.getAttribute("data-id"), el.value.trim() || "Ungrouped"));
     el.addEventListener("keydown", e=>{ if(e.key==="Enter") el.blur(); });
