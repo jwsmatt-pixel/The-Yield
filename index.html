@@ -833,7 +833,15 @@ const TARGET_FIELDS = [
   {key:"group", label:"Product Group", required:false},
   {key:"currentSupplier", label:"Current Supplier flag", required:false},
   {key:"annualVolume", label:"Annual Usage (kg/L/each)", required:false},
+  {key:"purchaseTotal", label:"Purchase Total", required:false},
 ];
+
+// Purchase Total auto-map is exact-match only, deliberately narrower than every
+// other field's substring matching above — it's source evidence used to prioritise
+// review, and a wrong silent guess here (e.g. matching "Total Discount") would
+// misdirect review priority. Unmapped is always safe; the user can map it by hand.
+const PURCHASE_TOTAL_HEADER_ALLOWLIST = ["purchasetotal","totalspend","ordertotal","linetotal"];
+function normalizeHeaderExact(h){ return (h||"").toLowerCase().replace(/[^a-z0-9]/g,""); }
 
 function handleFile(file){
   const reader = new FileReader();
@@ -870,6 +878,7 @@ function handleFile(file){
           // would previously match). Leaving it unmapped forces a deliberate
           // human choice, consistent with never manufacturing usage evidence.
           if(fn==="annualvolume") return false;
+          if(fn==="purchasetotal") return PURCHASE_TOTAL_HEADER_ALLOWLIST.includes(normalizeHeaderExact(h));
           return hn.includes(fn);
         });
       }
@@ -893,6 +902,11 @@ async function confirmImport(){
     const priceRaw = get("outerPrice").replace(/[$,]/g,"");
     const price = priceRaw==="" ? NaN : parseFloat(priceRaw);
     const group = get("group") || "Ungrouped";
+    // Purchase Total is source evidence only — captured verbatim from the import
+    // column, never derived from price/quantity/usage. Blank stays null, not 0,
+    // so "no data" and "zero spend" remain distinguishable downstream.
+    const purchaseTotalRaw = get("purchaseTotal").replace(/[$,]/g,"").trim();
+    const purchaseTotalParsed = purchaseTotalRaw==="" ? NaN : parseFloat(purchaseTotalRaw);
     const p = {
       id: cryptoId(),
       supplier: get("supplier"),
@@ -901,6 +915,7 @@ async function confirmImport(){
       packText: get("packText"),
       group,
       outerPrice: isNaN(price) ? 0 : price,
+      purchaseTotal: isNaN(purchaseTotalParsed) ? null : purchaseTotalParsed,
     };
     if(!p.supplier && !p.sku && !p.description) return;
     newProducts.push(p);
@@ -946,7 +961,7 @@ function cancelImport(){ S.importRows=null; S.importHeaders=null; S.importMappin
 /* ---------------- EXPORT ---------------- */
 
 function exportCSV(){
-  const header = ["Comparison Group","Supplier","SKU","Product","Pack","Outer Price","Total Canonical Quantity","Canonical Unit","Equalised Cost","Prediction Status","Current Supplier","Annual Usage","Annual Usage Basis","Estimated Annual Saving","Saving Confidence"];
+  const header = ["Comparison Group","Supplier","SKU","Product","Pack","Outer Price","Purchase Total","Total Canonical Quantity","Canonical Unit","Equalised Cost","Prediction Status","Current Supplier","Annual Usage","Annual Usage Basis","Estimated Annual Saving","Saving Confidence"];
   const lines = [header.map(toCSVField).join(",")];
   groupList().forEach(g=>{
     const rows = groupRows(g);
@@ -965,7 +980,7 @@ function exportCSV(){
       lines.push([
         g, r.product.supplier, r.product.sku, r.product.description,
         describePack(r.pack) || r.product.packText || r.product.description,
-        r.product.outerPrice, r.calc.state==="ok"?r.calc.canonicalQty:"", r.calc.state==="ok"?r.calc.canonicalUnit:"",
+        r.product.outerPrice, r.product.purchaseTotal ?? "", r.calc.state==="ok"?r.calc.canonicalQty:"", r.calc.state==="ok"?r.calc.canonicalUnit:"",
         r.calc.state==="ok"?r.calc.equalisedCost.toFixed(4):"", r.status, isCurrent?"Yes":"", annualVolume||"", volumeBasis, saving, confidence
       ].map(toCSVField).join(","));
     });
@@ -1171,6 +1186,28 @@ function toplineHTML(){
  * S: it's UI-only, must never be persisted, and always resets to "name" on
  * a fresh page load — a plain `let` does that for free. */
 let compareSortMode = "name";
+
+// productsSortMode follows the same rule as compareSortMode above: presentation-only,
+// never persisted, always resets to the default (equalised cost) on a fresh load.
+// It only ever reorders a copy of the rows for display — it never touches S.products.
+let productsSortMode = "equalised";
+
+// reviewSortMode follows the same rule as productsSortMode above: presentation-only,
+// never part of S, never persisted, always resets to "default" (the four Review
+// sections' natural classification order) on a fresh load.
+let reviewSortMode = "default";
+
+// Shared by Products and Review: blank Purchase Total values sort last in both
+// directions; non-blank ties (and blank-vs-blank) fall through to Array.sort's
+// guaranteed stability, preserving whatever order the caller started with.
+function comparePurchaseTotal(av, bv, mode){
+  const aBlank = av===null || av===undefined || isNaN(av);
+  const bBlank = bv===null || bv===undefined || isNaN(bv);
+  if(aBlank && bBlank) return 0;
+  if(aBlank) return 1;
+  if(bBlank) return -1;
+  return mode==="purchaseTotalDesc" ? (bv-av) : (av-bv);
+}
 
 function sortGroupsForCompare(groups, groupOpportunity, mode){
   if(mode!=="savingAmount" && mode!=="savingPercent") return groups; // "name": groups is already A→Z from groupList()
@@ -1457,6 +1494,11 @@ function compareGroupHTML(g){
 
 /* ---- Review ---- */
 function reviewHTML(rc){
+  const sortForReview = list => {
+    if(reviewSortMode!=="purchaseTotalDesc" && reviewSortMode!=="purchaseTotalAsc") return list;
+    return list.slice().sort((a,b)=>comparePurchaseTotal(a.product.purchaseTotal, b.product.purchaseTotal, reviewSortMode));
+  };
+
   const section = (title, hint, list, renderRow, headerAction) => `
     <div class="panel">
       <div class="panel-head"><h2>${title} <span class="hint" style="font-weight:400;">(${list.length})</span></h2>
@@ -1467,21 +1509,25 @@ function reviewHTML(rc){
 
   const rowNeedsReview = c => `<tr><td style="width:38%;">${esc(c.product.description)}<div style="font-size:11px;color:var(--ink-soft);">${esc(c.product.supplier)} · ${esc(c.product.sku)}</div></td>
     <td>${esc(c.product.packText || "(no pack text)")}</td>
+    <td class="right num-cell">${fmtCurrency(c.product.purchaseTotal)}</td>
     <td class="right">${statusBadge(c)}</td>
     <td class="right"><button class="pill-btn" onclick="openPackEditor('${c.product.id}')">Edit</button></td></tr>`;
 
   const rowMissing = c => `<tr><td style="width:38%;">${esc(c.product.description)}<div style="font-size:11px;color:var(--ink-soft);">${esc(c.product.supplier)} · ${esc(c.product.sku)}</div></td>
     <td style="color:var(--danger);">${esc(c.calc.error||"Cannot calculate")}</td>
+    <td class="right num-cell">${fmtCurrency(c.product.purchaseTotal)}</td>
     <td class="right">${statusBadge(c)}</td>
     <td class="right"><button class="pill-btn" onclick="openPackEditor('${c.product.id}')">Edit</button></td></tr>`;
 
   const rowUnverified = c => `<tr><td style="width:38%;">${esc(c.product.description)}<div style="font-size:11px;color:var(--ink-soft);">${esc(c.product.supplier)} · ${esc(c.product.sku)}</div></td>
     <td>${packChip(c)}</td>
+    <td class="right num-cell">${fmtCurrency(c.product.purchaseTotal)}</td>
     <td class="right num-cell">${fmtEqualised(c.calc.equalisedCost, c.calc.canonicalUnit)}</td>
     <td class="right"><button class="pill-btn save" onclick="quickVerify('${c.product.id}')">Verify</button><button class="pill-btn" onclick="openPackEditor('${c.product.id}')">Edit</button></td></tr>`;
 
   const rowConflict = c => `<tr><td style="width:38%;">${esc(c.product.description)}<div style="font-size:11px;color:var(--ink-soft);">${esc(c.product.supplier)} · ${esc(c.product.sku)}</div></td>
     <td style="color:var(--review);">Description implies a different quantity than the pack field</td>
+    <td class="right num-cell">${fmtCurrency(c.product.purchaseTotal)}</td>
     <td class="right">${statusBadge(c)}</td>
     <td class="right"><button class="pill-btn" onclick="openPackEditor('${c.product.id}')">Edit</button></td></tr>`;
 
@@ -1499,12 +1545,22 @@ function reviewHTML(rc){
       </tbody></table></div>
     </div>` : "";
 
+  const sortControl = `
+    <div class="filters" style="margin-bottom:10px;">
+      <select data-action="sort-review">
+        <option value="default" ${reviewSortMode==='default'?'selected':''}>Sort: Default order</option>
+        <option value="purchaseTotalDesc" ${reviewSortMode==='purchaseTotalDesc'?'selected':''}>Purchase Total: High → Low</option>
+        <option value="purchaseTotalAsc" ${reviewSortMode==='purchaseTotalAsc'?'selected':''}>Purchase Total: Low → High</option>
+      </select>
+    </div>`;
+
   return `
     ${currentSupplierConflictsPanel}
-    ${section("Needs Review","Pack structure can't be confidently determined.", rc.needsReview, rowNeedsReview)}
-    ${section("Missing Information","Normalisation can't be calculated yet.", rc.missing, rowMissing)}
-    ${section("Conflicts","Imported or inferred information disagrees.", rc.conflicts, rowConflict)}
-    ${section("Unverified Predictions","Looks right — confirm to lock it in.", rc.unverified, rowUnverified, unverifiedBatchAction)}
+    ${sortControl}
+    ${section("Needs Review","Pack structure can't be confidently determined.", sortForReview(rc.needsReview), rowNeedsReview)}
+    ${section("Missing Information","Normalisation can't be calculated yet.", sortForReview(rc.missing), rowMissing)}
+    ${section("Conflicts","Imported or inferred information disagrees.", sortForReview(rc.conflicts), rowConflict)}
+    ${section("Unverified Predictions","Looks right — confirm to lock it in.", sortForReview(rc.unverified), rowUnverified, unverifiedBatchAction)}
   `;
 }
 
@@ -1518,6 +1574,9 @@ function productsHTML(){
   if(f.group) rows = rows.filter(c=>c.product.group===f.group);
   if(f.status) rows = rows.filter(c=> f.status==="missing" ? c.missingInfo : (!c.missingInfo && c.status===f.status));
   rows = rows.slice().sort((a,b)=>{
+    if(productsSortMode==="purchaseTotalDesc" || productsSortMode==="purchaseTotalAsc"){
+      return comparePurchaseTotal(a.product.purchaseTotal, b.product.purchaseTotal, productsSortMode);
+    }
     const av = a.calc.state==="ok" ? a.calc.equalisedCost : Infinity;
     const bv = b.calc.state==="ok" ? b.calc.equalisedCost : Infinity;
     return av-bv;
@@ -1531,6 +1590,7 @@ function productsHTML(){
     <td><input type="text" class="group-input" list="gcn-groups-datalist" data-action="set-group" data-id="${c.product.id}" value="${esc(c.product.group||'Ungrouped')}" placeholder="Ungrouped"/></td>
     <td>${packChip(c)}</td>
     <td class="right num-cell">${fmtCurrency(c.product.outerPrice)}</td>
+    <td class="right num-cell">${fmtCurrency(c.product.purchaseTotal)}</td>
     <td class="right num-cell">${c.calc.state==="ok"?fmtEqualised(c.calc.equalisedCost,c.calc.canonicalUnit):`<span style="color:var(--danger);">${esc(c.calc.error)}</span>`}</td>
     <td>${statusBadge(c)}</td>
     <td class="right">
@@ -1552,6 +1612,11 @@ function productsHTML(){
         <option value="needsReview" ${f.status==='needsReview'?'selected':''}>Needs Review</option>
         <option value="missing" ${f.status==='missing'?'selected':''}>Missing Information</option>
       </select>
+      <select data-action="sort-products">
+        <option value="equalised" ${productsSortMode==='equalised'?'selected':''}>Sort: Equalised cost</option>
+        <option value="purchaseTotalDesc" ${productsSortMode==='purchaseTotalDesc'?'selected':''}>Purchase Total: High → Low</option>
+        <option value="purchaseTotalAsc" ${productsSortMode==='purchaseTotalAsc'?'selected':''}>Purchase Total: Low → High</option>
+      </select>
       <button class="pill-btn" style="margin-left:auto;" onclick="exportCSV()">Export CSV</button>
     </div>
     ${(() => {
@@ -1565,7 +1630,7 @@ function productsHTML(){
     })()}
     <div class="hint" style="padding:0 16px 10px 16px;">Type a new name in Group to split products out of a broad import category — e.g. change "SFRO" to "Squid" for just the squid lines. Matching names (exact, across suppliers) are what makes two products comparable.</div>
     ${rows.length ? `<div class="table-scroll"><table>
-      <thead><tr><th>Supplier</th><th>SKU</th><th>Description</th><th>Group</th><th>Pack</th><th class="right">Outer Price</th><th class="right">Equalised</th><th>Status</th><th></th></tr></thead>
+      <thead><tr><th>Supplier</th><th>SKU</th><th>Description</th><th>Group</th><th>Pack</th><th class="right">Outer Price</th><th class="right">Purchase Total</th><th class="right">Equalised</th><th>Status</th><th></th></tr></thead>
       <tbody>${body}</tbody>
     </table></div>` : `<div class="empty">No products match. <button class="pill-btn primary" onclick="loadDemo()">Load Demo Data</button></div>`}
   </div>`;
@@ -1579,7 +1644,7 @@ function importHTML(){
       <div class="dropzone-mobile-hint" style="font-size:14px; margin-bottom:8px; display:none;">Import a supplier CSV from your files, Downloads, or cloud storage</div>
       <button class="pill-btn primary" onclick="document.getElementById('fileInput').click()">Choose file</button>
       <input type="file" id="fileInput" accept=".csv"/>
-      <div class="hint" style="margin-top:14px;">Required: Supplier, Supplier SKU, Product Description, Outer Price.<br/>Optional: Pack Description, Product Group, Current Supplier flag, Annual Usage.</div>
+      <div class="hint" style="margin-top:14px;">Required: Supplier, Supplier SKU, Product Description, Outer Price.<br/>Optional: Pack Description, Product Group, Current Supplier flag, Annual Usage, Purchase Total.</div>
     </div></div>`;
   }
   const rowsPreview = S.importRows.slice(0,5);
@@ -1696,6 +1761,8 @@ function wireInputs(){
   document.querySelectorAll('[data-action="filter-group"]').forEach(el=>el.addEventListener("change", ()=>{ S.filters.group=el.value; render(); }));
   document.querySelectorAll('[data-action="filter-status"]').forEach(el=>el.addEventListener("change", ()=>{ S.filters.status=el.value; render(); }));
   document.querySelectorAll('[data-action="sort-compare"]').forEach(el=>el.addEventListener("change", ()=>{ compareSortMode=el.value; render(); }));
+  document.querySelectorAll('[data-action="sort-products"]').forEach(el=>el.addEventListener("change", ()=>{ productsSortMode=el.value; render(); }));
+  document.querySelectorAll('[data-action="sort-review"]').forEach(el=>el.addEventListener("change", ()=>{ reviewSortMode=el.value; render(); }));
   document.querySelectorAll('[data-action="set-group"]').forEach(el=>{
     el.addEventListener("change", ()=>setGroupForProduct(el.getAttribute("data-id"), el.value.trim() || "Ungrouped"));
     el.addEventListener("keydown", e=>{ if(e.key==="Enter") el.blur(); });
