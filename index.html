@@ -191,6 +191,8 @@ tr.best-row{background:var(--color-accent-2-100);}
 .pill-btn.save:hover{background:var(--color-accent-2-800); opacity:1;}
 .pill-btn.ghost{border:none; background:none; color:var(--color-accent-700);}
 .pill-btn.ghost:hover{background:color-mix(in srgb, var(--color-accent) 10%, transparent); color:var(--color-accent-700);}
+.pill-btn.danger{border-color:var(--danger); color:var(--danger);}
+.pill-btn.danger:hover{background:var(--danger-bg); opacity:1;}
 .pill-btn:disabled{opacity:.45; cursor:not-allowed;}
 .pill-btn + .pill-btn{margin-left:6px;}
 
@@ -746,6 +748,43 @@ function describePack(pack){
   const mult = (pack.inners||1) * (pack.unitsPerInner||1);
   if(mult && mult!==1) return `${mult} x ${pack.qtyPerUnit}${pack.unit}`;
   return `${pack.qtyPerUnit}${pack.unit}`;
+}
+/**
+ * Withdraws a Verified override for exactly one Supplier + SKU.
+ *
+ * Verification is a human judgement, so it has to be reversible: if the
+ * reading behind it turns out not to be trusted, there must be a way to
+ * take it back rather than living with a number nobody believes.
+ *
+ * This is state removal, nothing more. Deleting the override is the whole
+ * operation — the pack then resolves through the existing chain (packText
+ * → description → Needs Review) exactly as it would for a product that had
+ * never been verified, because computeProduct only ever consults
+ * S.overrides. No fresh prediction is computed or stored here.
+ *
+ * Deliberately never touches S.products[]: the imported row is the
+ * supplier's evidence, not our opinion of it, and withdrawing trust must
+ * not rewrite what was actually imported.
+ */
+async function withdrawVerification(productId){
+  const p = S.products.find(x=>x.id===productId);
+  if(!p) return;
+  const key = overrideKey(p.supplier, p.sku);
+  if(!S.overrides[key]) return;
+  delete S.overrides[key];
+  await persist("overrides");
+  // Report where it actually landed — read back from the normal resolution
+  // path rather than predicting it, so this can never disagree with the badge.
+  const c = computeProduct(p);
+  showToast(`Verification withdrawn — ${p.supplier} / ${p.sku} is now ${c.status==="predicted"?"Predicted":"Needs Review"}`);
+  closeEditor();
+}
+function confirmWithdrawVerification(productId){
+  const p = S.products.find(x=>x.id===productId);
+  if(!p || !S.overrides[overrideKey(p.supplier,p.sku)]) return;
+  if(confirm(`Withdraw the verified pack structure for ${p.supplier} / ${p.sku}?\n\nThis affects this one product only. Its pack will be read fresh from the supplier's own text, becoming Predicted or Needs Review depending on what that text supports — and any saving based on it drops back to Indicative.\n\nThe imported product itself is not changed, and you can verify it again at any time.`)){
+    withdrawVerification(productId);
+  }
 }
 async function quickVerify(productId){
   const p = S.products.find(x=>x.id===productId);
@@ -1726,7 +1765,12 @@ function editorModalHTML(){
       </div>
       <div class="modal-foot">
         <button class="pill-btn" onclick="closeEditor()">Cancel</button>
-        <button class="pill-btn" onclick="saveDraft(false)">Save as Predicted</button>
+        ${ov
+          // On an already-Verified product, "Save as Predicted" was a lie: the
+          // override still won every read afterwards, so nothing downgraded. The
+          // honest action in that state is withdrawing the verification itself.
+          ? `<button class="pill-btn danger" onclick="confirmWithdrawVerification('${p.id}')">Withdraw Verification</button>`
+          : `<button class="pill-btn" onclick="saveDraft(false)">Save as Predicted</button>`}
         <button class="pill-btn save" ${calc.state!=='ok'?'disabled':''} onclick="saveDraft(true)">Save &amp; Verify</button>
       </div>
     </div>
