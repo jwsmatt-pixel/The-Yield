@@ -775,8 +775,13 @@ async function withdrawVerification(productId){
   await persist("overrides");
   // Report where it actually landed — read back from the normal resolution
   // path rather than predicting it, so this can never disagree with the badge.
-  const c = computeProduct(p);
-  showToast(`Verification withdrawn — ${p.supplier} / ${p.sku} is now ${c.status==="predicted"?"Predicted":"Needs Review"}`);
+    const c = computeProduct(p);
+  // Mirrors statusBadge()'s own precedence — missingInfo is a separate flag,
+  // not a status value, and is checked first there too.
+  const landed = c.missingInfo ? "Missing Info"
+               : c.status === "predicted" ? "Predicted"
+               : "Needs Review";
+  showToast(`Verification withdrawn — ${p.supplier} / ${p.sku} is now ${landed}`);
   closeEditor();
 }
 function confirmWithdrawVerification(productId){
